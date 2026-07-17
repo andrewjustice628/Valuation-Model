@@ -22,6 +22,18 @@ export interface MarketDataProvider {
   fetchQuote(symbol: string): Promise<Quote>;
   /** A peer valuation multiple; null when the provider doesn't expose it. */
   fetchMultiple(symbol: string, multipleName: string): Promise<number | null>;
+  /** Latest annual reported financials mapped to canonical base-year fields. */
+  fetchFinancials(symbol: string): Promise<MappedFinancialsResponse>;
+}
+
+export interface MappedFinancialsResponse {
+  symbol: string;
+  fiscalYear: number | null;
+  form: string | null;
+  endDate: string | null;
+  values: Record<string, number>;
+  found: string[];
+  missing: string[];
 }
 
 /** Default provider: our Netlify Function proxy (key hidden server-side). */
@@ -48,6 +60,20 @@ export const netlifyQuoteProvider: MarketDataProvider = {
     const data = (await res.json().catch(() => ({}))) as { value?: number | null; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Metric request failed (${res.status}).`);
     return typeof data.value === 'number' && Number.isFinite(data.value) ? data.value : null;
+  },
+  async fetchFinancials(symbol: string): Promise<MappedFinancialsResponse> {
+    const res = await fetch(`/api/financials?symbol=${encodeURIComponent(symbol)}`);
+    const data = (await res.json().catch(() => ({}))) as Partial<MappedFinancialsResponse> & { error?: string };
+    if (!res.ok) throw new Error(data.error ?? `Financials request failed (${res.status}).`);
+    return {
+      symbol: data.symbol ?? symbol,
+      fiscalYear: data.fiscalYear ?? null,
+      form: data.form ?? null,
+      endDate: data.endDate ?? null,
+      values: data.values ?? {},
+      found: data.found ?? [],
+      missing: data.missing ?? [],
+    };
   },
 };
 

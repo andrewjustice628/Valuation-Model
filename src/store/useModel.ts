@@ -99,6 +99,8 @@ export interface ModelState {
   labels: Record<string, string>;
   quoteStatus: FetchStatus;
   quoteError: string | null;
+  financialsStatus: FetchStatus;
+  financialsMessage: string | null;
 
   setCompany: (patch: Partial<CompanyInfo>) => void;
   setBase: (field: keyof BaseYear, value: number) => void;
@@ -114,6 +116,7 @@ export interface ModelState {
   setLabel: (fieldId: string, label: string) => void;
   fetchQuote: () => Promise<void>;
   fetchPeerMultiple: (index: number) => Promise<void>;
+  fetchFinancials: () => Promise<void>;
 }
 
 export const useModel = create<ModelState>((set, get) => ({
@@ -135,6 +138,8 @@ export const useModel = create<ModelState>((set, get) => ({
   labels: {},
   quoteStatus: 'idle',
   quoteError: null,
+  financialsStatus: 'idle',
+  financialsMessage: null,
 
   setCompany: (patch) => set((s) => ({ company: { ...s.company, ...patch } })),
   setBase: (field, value) => set((s) => ({ base: { ...s.base, [field]: value } })),
@@ -191,6 +196,41 @@ export const useModel = create<ModelState>((set, get) => ({
       get().setPeer(index, { multiple: value });
     } catch {
       // Leave the field for manual entry on failure.
+    }
+  },
+  fetchFinancials: async () => {
+    const ticker = get().company.ticker.trim();
+    if (!ticker) return;
+    set({ financialsStatus: 'loading', financialsMessage: null });
+    try {
+      const r = await activeProvider.fetchFinancials(ticker);
+      set((s) => {
+        const base = { ...s.base };
+        for (const [k, v] of Object.entries(r.values)) {
+          if (k in base && typeof v === 'number') (base as Record<string, number>)[k] = v;
+        }
+        if (r.fiscalYear) base.fiscalYear = r.fiscalYear;
+        // Prefill the net-debt bridge from the same actuals for a sensible DCF.
+        const bridge = {
+          ...s.bridge,
+          debt: base.longTermDebt + base.commercialPaper,
+          cashAndEquivalents: base.cash,
+        };
+        const missing = r.missing.length
+          ? ` Enter manually: ${r.missing.join(', ')}.`
+          : '';
+        return {
+          base,
+          bridge,
+          company: { ...s.company, unit: 'Actual ($)' },
+          financialsStatus: 'ok',
+          financialsMessage:
+            `Filled ${r.found.length} fields from ${r.form ?? 'filing'} (FY ${r.fiscalYear ?? '?'}). ` +
+            `Values are in actual dollars — enter forecast $ inputs in the same unit.${missing}`,
+        };
+      });
+    } catch (e) {
+      set({ financialsStatus: 'error', financialsMessage: e instanceof Error ? e.message : 'Fetch failed.' });
     }
   },
 }));

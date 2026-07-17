@@ -55,9 +55,18 @@ function CompanyHeader() {
 function BaseSection() {
   const base = useModel((s) => s.base);
   const setBase = useModel((s) => s.setBase);
+  const fetchFinancials = useModel((s) => s.fetchFinancials);
+  const status = useModel((s) => s.financialsStatus);
+  const message = useModel((s) => s.financialsMessage);
   return (
     <details open>
       <summary>Base year (last actuals) — {base.fiscalYear}</summary>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <button className="fetch" onClick={() => fetchFinancials()} disabled={status === 'loading'}>
+          {status === 'loading' ? 'Fetching filing…' : 'Auto-fill from latest filing'}
+        </button>
+        {message && <span className={status === 'error' ? 'err' : 'ok'}>{message}</span>}
+      </div>
       <div className="grid">
         {BASE_FIELDS.map((f) => (
           <div className="cell" key={f.id}>
