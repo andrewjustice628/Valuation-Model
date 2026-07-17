@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+
+# Netlify
+.netlify/
+
+# Source workbooks & any client data — NEVER commit (local-only policy)
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.log
