@@ -92,6 +92,8 @@ thead th { color: var(--muted); font-weight: 600; font-size: 12px; }
   border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
 .totals span { color: var(--muted); }
 tr.em td { color: var(--accent); font-weight: 600; }
+th.hist, td.hist { color: var(--muted); }
+th.fdiv, td.fdiv { border-left: 2px solid var(--accent); }
 .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
 .tabs button.on { background: var(--accent); color: #05121f; border-color: var(--accent); font-weight: 600; }
 .output { position: sticky; top: 16px; }

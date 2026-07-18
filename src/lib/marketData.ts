@@ -26,6 +26,8 @@ export interface MarketDataProvider {
   fetchFinancials(symbol: string): Promise<MappedFinancialsResponse>;
 }
 
+import type { HistoricalYear } from './historicals';
+
 export interface MappedFinancialsResponse {
   symbol: string;
   source: 'sec' | 'yahoo' | null;
@@ -35,6 +37,7 @@ export interface MappedFinancialsResponse {
   currency: string | null;
   values: Record<string, number>;
   seed: Record<string, number>;
+  historicals: HistoricalYear[];
   found: string[];
   missing: string[];
 }
@@ -77,6 +80,7 @@ export const netlifyQuoteProvider: MarketDataProvider = {
       currency: data.currency ?? null,
       values: data.values ?? {},
       seed: data.seed ?? {},
+      historicals: data.historicals ?? [],
       found: data.found ?? [],
       missing: data.missing ?? [],
     };

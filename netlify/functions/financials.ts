@@ -3,8 +3,8 @@
  * them to our canonical base-year fields (mapping is shared, pure, tested code
  * in src/lib/financials.ts). Key stays server-side. Values are raw dollars.
  */
-import { mapReportedFinancials, deriveReportedSeed, type ReportedFinancials } from '../../src/lib/financials';
-import { mapYahooTimeseries, deriveYahooSeed, YAHOO_TS_FIELDS } from '../../src/lib/yahooFinancials';
+import { mapReportedFinancials, deriveReportedSeed, deriveReportedHistoricals, type ReportedFinancials } from '../../src/lib/financials';
+import { mapYahooTimeseries, deriveYahooSeed, deriveYahooHistoricals, YAHOO_TS_FIELDS } from '../../src/lib/yahooFinancials';
 import { deriveBalanceSheetSeed } from '../../src/lib/seed';
 
 export const config = { path: '/api/financials' };
@@ -52,8 +52,7 @@ async function fetchYahooFinancials(symbol: string) {
   };
   const series = data.timeseries?.result ?? [];
 
-  const values: Record<string, number> = {};
-  let revenueHistory: Array<{ year: number; revenue: number }> = [];
+  const byYear: Record<number, Record<string, number>> = {};
   let endDate: string | null = null;
   let currency: string | null = null;
 
@@ -62,24 +61,25 @@ async function fetchYahooFinancials(symbol: string) {
     if (!type) continue;
     const arr = s[type];
     if (!Array.isArray(arr)) continue;
-    const points = (arr as TsPoint[]).filter(
-      (p) => p && p.reportedValue && typeof p.reportedValue.raw === 'number',
-    );
-    if (points.length === 0) continue;
-    points.sort((a, b) => (b.asOfDate ?? '').localeCompare(a.asOfDate ?? ''));
-    const p = points[0];
-    values[type.replace(/^annual/, '')] = p.reportedValue!.raw as number;
-    if (!endDate || (p.asOfDate ?? '') > endDate) endDate = p.asOfDate ?? endDate;
-    if (!currency && p.currencyCode) currency = p.currencyCode;
-    if (type === 'annualTotalRevenue') {
-      revenueHistory = points.map((q) => ({
-        year: Number((q.asOfDate ?? '').slice(0, 4)),
-        revenue: q.reportedValue!.raw as number,
-      }));
+    const base = type.replace(/^annual/, '');
+    for (const p of arr as TsPoint[]) {
+      if (!p || !p.reportedValue || typeof p.reportedValue.raw !== 'number') continue;
+      const yr = Number((p.asOfDate ?? '').slice(0, 4));
+      if (!yr) continue;
+      (byYear[yr] ??= {})[base] = p.reportedValue.raw;
+      if (!endDate || (p.asOfDate ?? '') > endDate) endDate = p.asOfDate ?? endDate;
+      if (!currency && p.currencyCode) currency = p.currencyCode;
     }
   }
 
-  return { values, revenueHistory, endDate, currency };
+  const years = Object.keys(byYear).map(Number).sort((a, b) => a - b);
+  const latestYear = years[years.length - 1];
+  const values = latestYear ? byYear[latestYear] : {};
+  const revenueHistory = years
+    .map((y) => ({ year: y, revenue: byYear[y].TotalRevenue }))
+    .filter((p) => Number.isFinite(p.revenue));
+
+  return { values, revenueHistory, byYear, endDate, currency };
 }
 
 interface ReportRow {
@@ -125,6 +125,7 @@ export default async (req: Request): Promise<Response> => {
         endDate: latest.endDate ?? null,
         currency: 'USD',
         seed,
+        historicals: deriveReportedHistoricals(reports),
         ...mapped,
       });
     }
@@ -143,6 +144,7 @@ export default async (req: Request): Promise<Response> => {
           endDate: y.endDate,
           currency: y.currency,
           seed,
+          historicals: deriveYahooHistoricals(y.byYear),
           ...mapped,
         });
       }

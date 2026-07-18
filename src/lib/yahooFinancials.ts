@@ -10,10 +10,11 @@
  */
 import type { MappedFinancials, MappableField } from './financials';
 import { effectiveTaxRate, revenueGrowthFromHistory, type ForecastSeed } from './seed';
+import { computeHistoricalIS, type HistoricalYear } from './historicals';
 
 /** Yahoo timeseries base field names we request (each prefixed "annual"). */
 export const YAHOO_TS_FIELDS = [
-  'TotalRevenue', 'CostOfRevenue',
+  'TotalRevenue', 'CostOfRevenue', 'NetIncome',
   // Income-statement / cash-flow lines used to seed the forecast:
   'ResearchAndDevelopment', 'SellingGeneralAndAdministration', 'TaxProvision', 'PretaxIncome',
   'ReconciledDepreciation', 'CapitalExpenditure', 'StockBasedCompensation',
@@ -112,4 +113,25 @@ export function deriveYahooSeed(
   const growth = revenueGrowthFromHistory(revenueHistory);
   if (growth !== undefined) seed.revenueGrowth = growth;
   return seed;
+}
+
+/** Historical income statements (up to last 5 years) from Yahoo per-year data. */
+export function deriveYahooHistoricals(byYear: Record<number, Record<string, number>>): HistoricalYear[] {
+  return Object.keys(byYear)
+    .map(Number)
+    .filter((y) => Number.isFinite(y))
+    .sort((a, b) => a - b)
+    .slice(-5)
+    .map((y) => {
+      const v = byYear[y];
+      return computeHistoricalIS({
+        fiscalYear: y,
+        revenue: v.TotalRevenue,
+        cogs: v.CostOfRevenue,
+        rd: v.ResearchAndDevelopment,
+        sga: v.SellingGeneralAndAdministration,
+        da: v.ReconciledDepreciation,
+        netIncome: v.NetIncome,
+      });
+    });
 }

@@ -9,6 +9,10 @@
  */
 import type { BaseYear } from '../engine/statements';
 import { effectiveTaxRate, revenueGrowthFromHistory, type ForecastSeed } from './seed';
+import { computeHistoricalIS, type HistoricalYear } from './historicals';
+
+const NET_INCOME_CONCEPTS = ['NetIncomeLoss', 'ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic'];
+const COGS_CONCEPTS = ['CostOfGoodsAndServicesSold', 'CostOfRevenue', 'CostOfGoodsSold', 'CostOfSales'];
 
 export interface ReportedItem {
   concept?: string;
@@ -197,4 +201,25 @@ export function deriveReportedSeed(reports: ReportLike[]): ForecastSeed {
   if (growth !== undefined) seed.revenueGrowth = growth;
 
   return seed;
+}
+
+/** Historical income statements (up to last 5 years) from as-reported filings. */
+export function deriveReportedHistoricals(reports: ReportLike[]): HistoricalYear[] {
+  return reports
+    .filter((r) => r.report)
+    .map((r) => {
+      const m = lookupOf(r.report!);
+      return computeHistoricalIS({
+        fiscalYear: Number((r.endDate ?? '').slice(0, 4)) || r.year || 0,
+        revenue: firstOf(m, SEED_CONCEPTS.revenue),
+        cogs: firstOf(m, COGS_CONCEPTS),
+        rd: firstOf(m, SEED_CONCEPTS.rd),
+        sga: firstOf(m, SEED_CONCEPTS.sga),
+        da: firstOf(m, SEED_CONCEPTS.da),
+        netIncome: firstOf(m, NET_INCOME_CONCEPTS),
+      });
+    })
+    .filter((h) => h.fiscalYear)
+    .sort((a, b) => a.fiscalYear - b.fiscalYear)
+    .slice(-5);
 }

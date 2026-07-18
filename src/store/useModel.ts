@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { activeProvider } from '../lib/marketData';
 import { RAMP_SEED_FIELDS } from '../lib/seed';
+import type { HistoricalYear } from '../lib/historicals';
 import type { BaseYear, ForecastAssumptions } from '../engine/statements';
 import type { NetDebtBridge, WaccAssumptions } from '../engine/types';
 
@@ -37,7 +38,11 @@ export interface DcfConfig {
 
 type FetchStatus = 'idle' | 'loading' | 'ok' | 'error';
 
-const YEARS = [2026, 2027, 2028, 2029, 2030];
+// Latest completed fiscal year (dynamic) → the model always spans the same
+// number of years back and forward from the present until a filing overrides it.
+const LATEST_ACTUAL_YEAR = new Date().getFullYear() - 1;
+const forecastYears = (latestActual: number): number[] => [1, 2, 3, 4, 5].map((k) => latestActual + k);
+const YEARS = forecastYears(LATEST_ACTUAL_YEAR);
 const GROWTH = [0.1, 0.09, 0.08, 0.07, 0.06];
 const DA = [50, 55, 60, 66, 73];
 const CAPEX = [80, 85, 90, 95, 100];
@@ -71,7 +76,7 @@ const defaultAssumption = (fiscalYear: number, i: number): ForecastAssumptions =
 });
 
 const defaultBase: BaseYear = {
-  fiscalYear: 2025, revenue: 1000, cogs: 600,
+  fiscalYear: LATEST_ACTUAL_YEAR, revenue: 1000, cogs: 600,
   cash: 100, accountsReceivable: 150, inventories: 80, otherCurrentAssets: 20,
   ppe: 500, otherNonCurrentAssets: 50,
   accountsPayable: 90, otherCurrentLiabilities: 40, deferredRevenue: 30,
@@ -98,6 +103,7 @@ export interface ModelState {
   dcf: DcfConfig;
   comps: CompsConfig;
   labels: Record<string, string>;
+  historicals: HistoricalYear[];
   quoteStatus: FetchStatus;
   quoteError: string | null;
   financialsStatus: FetchStatus;
@@ -137,6 +143,7 @@ export const useModel = create<ModelState>((set, get) => ({
     companyMetricOverride: null,
   },
   labels: {},
+  historicals: [],
   quoteStatus: 'idle',
   quoteError: null,
   financialsStatus: 'idle',
@@ -226,8 +233,10 @@ export const useModel = create<ModelState>((set, get) => ({
         const seededKeys = Object.keys(seed).filter((k) => typeof seed[k] === 'number' && Number.isFinite(seed[k]));
         const g = typeof seed.revenueGrowth === 'number' && Number.isFinite(seed.revenueGrowth) ? seed.revenueGrowth : 0;
         const ramp = new Set<string>(RAMP_SEED_FIELDS);
-        const assumptions = s.assumptions.map((a, i) => {
-          const na = defaultAssumption(a.fiscalYear, i);
+        // Forecast years run forward dynamically from the latest actual year.
+        const latestActual = base.fiscalYear;
+        const assumptions = [0, 1, 2, 3, 4].map((i) => {
+          const na = defaultAssumption(latestActual + i + 1, i);
           for (const k of seededKeys) {
             if (!(k in na)) continue;
             const value = ramp.has(k) ? seed[k] * Math.pow(1 + g, i + 1) : seed[k];
@@ -244,6 +253,7 @@ export const useModel = create<ModelState>((set, get) => ({
         return {
           base,
           assumptions,
+          historicals: r.historicals ?? [],
           company: { ...s.company, unit: cur === 'USD' ? 'Actual ($)' : `Actual (${cur})` },
           financialsStatus: 'ok',
           financialsMessage:

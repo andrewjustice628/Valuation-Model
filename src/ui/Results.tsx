@@ -21,6 +21,7 @@ function UpsideBadge({ target }: { target: number }) {
 
 export function Results() {
   const { statements, dcf, compsResult, terminalEbitda } = useComputed();
+  const historicals = useModel((s) => s.historicals);
   const [tab, setTab] = useState<'is' | 'bs' | 'cf'>('is');
   const fy = statements.years.map((y) => y.incomeStatement.fiscalYear);
 
@@ -71,23 +72,50 @@ export function Results() {
           <button className={tab === 'bs' ? 'on' : ''} onClick={() => setTab('bs')}>Balance Sheet</button>
           <button className={tab === 'cf' ? 'on' : ''} onClick={() => setTab('cf')}>Cash Flow</button>
         </div>
-        <table>
-          <thead><tr><th>{tab === 'is' ? 'Income Statement' : tab === 'bs' ? 'Balance Sheet' : 'Cash Flow'}</th>{fy.map((y) => <th key={y}>{y}</th>)}</tr></thead>
-          <tbody>
-            {tab === 'is' && (['Revenue:revenue', 'Gross Profit:grossProfit', 'EBIT:ebit', 'EBITDA:ebitda', 'Net Income:netIncome'] as const).map((row) => {
-              const [label, key] = row.split(':') as [string, keyof typeof statements.years[0]['incomeStatement']];
-              return <tr key={key}><td>{label}</td>{statements.years.map((y) => <td key={y.incomeStatement.fiscalYear}>{money(y.incomeStatement[key] as number)}</td>)}</tr>;
-            })}
-            {tab === 'bs' && (['Total Assets:totalAssets', 'Total Liabilities:totalLiabilities', 'Total Equity:totalEquity', 'Cash:cash', 'Net Working Capital:netWorkingCapital', 'Balance Check:balanceCheck'] as const).map((row) => {
-              const [label, key] = row.split(':') as [string, keyof typeof statements.years[0]['balanceSheet']];
-              return <tr key={key} className={key === 'balanceCheck' ? 'em' : ''}><td>{label}</td>{statements.years.map((y) => <td key={y.balanceSheet.fiscalYear}>{money(y.balanceSheet[key] as number)}</td>)}</tr>;
-            })}
-            {tab === 'cf' && (['Cash from Ops:cashFromOperations', 'Cash from Investing:cashFromInvesting', 'Cash from Financing:cashFromFinancing', 'Net Change in Cash:netChangeInCash'] as const).map((row) => {
-              const [label, key] = row.split(':') as [string, keyof typeof statements.years[0]['cashFlow']];
-              return <tr key={key}><td>{label}</td>{statements.years.map((y) => <td key={y.cashFlow.fiscalYear}>{money(y.cashFlow[key] as number)}</td>)}</tr>;
-            })}
-          </tbody>
-        </table>
+        {tab === 'is' ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Income Statement</th>
+                {historicals.map((h) => <th key={`h${h.fiscalYear}`} className="hist">{h.fiscalYear}A</th>)}
+                {statements.years.map((y, i) => (
+                  <th key={y.incomeStatement.fiscalYear} className={i === 0 ? 'fdiv' : ''}>{y.incomeStatement.fiscalYear}E</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(['Revenue:revenue', 'Gross Profit:grossProfit', 'EBIT:ebit', 'EBITDA:ebitda', 'Net Income:netIncome'] as const).map((row) => {
+                const [label, key] = row.split(':') as [string, 'revenue' | 'grossProfit' | 'ebit' | 'ebitda' | 'netIncome'];
+                return (
+                  <tr key={key}>
+                    <td>{label}</td>
+                    {historicals.map((h) => <td key={`h${h.fiscalYear}`} className="hist">{money(h[key] as number)}</td>)}
+                    {statements.years.map((y, i) => (
+                      <td key={y.incomeStatement.fiscalYear} className={i === 0 ? 'fdiv' : ''}>{money(y.incomeStatement[key])}</td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <table>
+            <thead><tr><th>{tab === 'bs' ? 'Balance Sheet' : 'Cash Flow'}</th>{fy.map((y) => <th key={y}>{y}E</th>)}</tr></thead>
+            <tbody>
+              {tab === 'bs' && (['Total Assets:totalAssets', 'Total Liabilities:totalLiabilities', 'Total Equity:totalEquity', 'Cash:cash', 'Net Working Capital:netWorkingCapital', 'Balance Check:balanceCheck'] as const).map((row) => {
+                const [label, key] = row.split(':') as [string, keyof typeof statements.years[0]['balanceSheet']];
+                return <tr key={key} className={key === 'balanceCheck' ? 'em' : ''}><td>{label}</td>{statements.years.map((y) => <td key={y.balanceSheet.fiscalYear}>{money(y.balanceSheet[key] as number)}</td>)}</tr>;
+              })}
+              {tab === 'cf' && (['Cash from Ops:cashFromOperations', 'Cash from Investing:cashFromInvesting', 'Cash from Financing:cashFromFinancing', 'Net Change in Cash:netChangeInCash'] as const).map((row) => {
+                const [label, key] = row.split(':') as [string, keyof typeof statements.years[0]['cashFlow']];
+                return <tr key={key}><td>{label}</td>{statements.years.map((y) => <td key={y.cashFlow.fiscalYear}>{money(y.cashFlow[key] as number)}</td>)}</tr>;
+              })}
+            </tbody>
+          </table>
+        )}
+        {tab === 'is' && (historicals.length > 0
+          ? <p className="note">Columns marked <b>A</b> are historical actuals; <b>E</b> are forecast. Auto-fill a ticker to populate actuals.</p>
+          : <p className="note">Auto-fill a ticker to show historical actuals (A) beside the forecast (E).</p>)}
         {tab === 'bs' && <p className="note">Balance check is 0 every year — the model is articulated by construction.</p>}
       </section>
     </div>
