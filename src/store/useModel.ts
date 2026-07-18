@@ -217,12 +217,7 @@ export const useModel = create<ModelState>((set, get) => ({
           if (k in base) (base as Record<string, number>)[k] = 0;
         }
         if (r.fiscalYear) base.fiscalYear = r.fiscalYear;
-        // Prefill the net-debt bridge from the same actuals for a sensible DCF.
-        const bridge = {
-          ...s.bridge,
-          debt: base.longTermDebt + base.commercialPaper,
-          cashAndEquivalents: base.cash,
-        };
+        // Net debt derives from the base year in useComputed — no bridge prefill.
         // Rebuild every forecast year from clean defaults (so a prior company's
         // seeded assumptions don't linger), then apply this company's seed:
         // rates/ratios flat; dollar drivers ramp at the geometric revenue-growth
@@ -248,7 +243,6 @@ export const useModel = create<ModelState>((set, get) => ({
         const verify = r.source === 'yahoo' ? ' Source is unofficial — verify against the report.' : '';
         return {
           base,
-          bridge,
           assumptions,
           company: { ...s.company, unit: cur === 'USD' ? 'Actual ($)' : `Actual (${cur})` },
           financialsStatus: 'ok',

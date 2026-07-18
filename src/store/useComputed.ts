@@ -19,12 +19,19 @@ export function useComputed() {
 
   return useMemo(() => {
     const statements = buildStatements(base, assumptions);
+    // Net debt derives from the base year (debt & cash) plus the bridge's other
+    // items, so editing the base-year balance sheet flows straight into the DCF.
+    const effectiveBridge = {
+      ...bridge,
+      debt: base.longTermDebt + base.commercialPaper,
+      cashAndEquivalents: base.cash,
+    };
     const dcf = runDcf({
       years: statements.dcfYears,
       wacc,
       stub: dcfCfg.stub,
       longTermGrowth: dcfCfg.longTermGrowth,
-      bridge,
+      bridge: effectiveBridge,
       sharesOutstanding: shares,
       terminalBasis: dcfCfg.terminalBasis,
     });

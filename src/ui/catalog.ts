@@ -91,11 +91,11 @@ export const WACC_FIELDS: FieldDef<keyof WaccAssumptions>[] = [
   { id: 'weightDebt', label: 'Debt Weight', percent: true },
 ];
 
+// Debt and cash are taken from the base year (long-term debt + commercial
+// paper, and cash) — these are the additional net-debt bridge items only.
 export const BRIDGE_FIELDS: FieldDef<keyof NetDebtBridge>[] = [
-  { id: 'debt', label: 'Debt' },
   { id: 'convertibleStock', label: 'Convertible Stock' },
   { id: 'preferredStock', label: 'Preferred Stock' },
   { id: 'minorityInterest', label: 'Noncontrolling (Minority) Interests' },
-  { id: 'cashAndEquivalents', label: 'Cash & Cash Equivalents' },
   { id: 'equityInvestments', label: 'Equity Investments' },
 ];

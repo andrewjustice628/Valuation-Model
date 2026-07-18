@@ -159,6 +159,10 @@ function BridgeSection() {
   return (
     <details>
       <summary>Net debt bridge</summary>
+      <p className="note">
+        Debt (long-term debt + commercial paper) and cash come from the base year —
+        edit them there. These are the additional bridge items.
+      </p>
       <div className="grid">
         {BRIDGE_FIELDS.map((f) => (
           <div className="cell" key={f.id}>
