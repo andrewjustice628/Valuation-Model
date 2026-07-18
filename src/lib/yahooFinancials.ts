@@ -10,7 +10,7 @@
  */
 import type { MappedFinancials, MappableField } from './financials';
 import { effectiveTaxRate, revenueGrowthFromHistory, type ForecastSeed } from './seed';
-import { computeHistoricalIS, type HistoricalYear } from './historicals';
+import { computeHistoricalYear, type HistoricalYear } from './historicals';
 
 /** Yahoo timeseries base field names we request (each prefixed "annual"). */
 export const YAHOO_TS_FIELDS = [
@@ -20,6 +20,9 @@ export const YAHOO_TS_FIELDS = [
   'ReconciledDepreciation', 'CapitalExpenditure', 'StockBasedCompensation',
   'CommonStockDividendPaid', 'RepurchaseOfCapitalStock', 'InterestExpense',
   'InterestIncome', 'InterestIncomeNonOperating',
+  // Historical balance-sheet / cash-flow totals:
+  'TotalAssets', 'TotalLiabilitiesNetMinorityInterest', 'StockholdersEquity',
+  'OperatingCashFlow', 'InvestingCashFlow', 'FinancingCashFlow', 'ChangesInCash',
   'CashAndCashEquivalents', 'OtherShortTermInvestments', 'CashCashEquivalentsAndShortTermInvestments',
   'AccountsReceivable', 'Receivables', 'Inventory', 'OtherCurrentAssets',
   'NetPPE', 'Goodwill', 'OtherIntangibleAssets', 'OtherNonCurrentAssets',
@@ -124,7 +127,7 @@ export function deriveYahooHistoricals(byYear: Record<number, Record<string, num
     .slice(-5)
     .map((y) => {
       const v = byYear[y];
-      return computeHistoricalIS({
+      return computeHistoricalYear({
         fiscalYear: y,
         revenue: v.TotalRevenue,
         cogs: v.CostOfRevenue,
@@ -132,6 +135,20 @@ export function deriveYahooHistoricals(byYear: Record<number, Record<string, num
         sga: v.SellingGeneralAndAdministration,
         da: v.ReconciledDepreciation,
         netIncome: v.NetIncome,
+        totalAssets: v.TotalAssets,
+        totalLiabilities: v.TotalLiabilitiesNetMinorityInterest,
+        totalEquity: v.StockholdersEquity ?? v.CommonStockEquity,
+        cash: v.CashAndCashEquivalents,
+        accountsReceivable: v.AccountsReceivable ?? v.Receivables,
+        inventories: v.Inventory,
+        otherCurrentAssets: v.OtherCurrentAssets,
+        accountsPayable: v.AccountsPayable ?? v.Payables,
+        otherCurrentLiabilities: v.OtherCurrentLiabilities,
+        deferredRevenue: v.CurrentDeferredRevenue ?? v.CurrentDeferredLiabilities,
+        cashFromOperations: v.OperatingCashFlow,
+        cashFromInvesting: v.InvestingCashFlow,
+        cashFromFinancing: v.FinancingCashFlow,
+        netChangeInCash: v.ChangesInCash,
       });
     });
 }

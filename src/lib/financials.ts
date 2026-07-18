@@ -9,10 +9,23 @@
  */
 import type { BaseYear } from '../engine/statements';
 import { effectiveTaxRate, revenueGrowthFromHistory, type ForecastSeed } from './seed';
-import { computeHistoricalIS, type HistoricalYear } from './historicals';
+import { computeHistoricalYear, type HistoricalYear } from './historicals';
 
 const NET_INCOME_CONCEPTS = ['NetIncomeLoss', 'ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic'];
 const COGS_CONCEPTS = ['CostOfGoodsAndServicesSold', 'CostOfRevenue', 'CostOfGoodsSold', 'CostOfSales'];
+const HIST_CONCEPTS = {
+  totalAssets: ['Assets'],
+  totalLiabilities: ['Liabilities'],
+  totalEquity: ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
+  cash: ['CashAndCashEquivalentsAtCarryingValue', 'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'],
+  cfo: ['NetCashProvidedByUsedInOperatingActivities'],
+  cfi: ['NetCashProvidedByUsedInInvestingActivities'],
+  cff: ['NetCashProvidedByUsedInFinancingActivities'],
+  netChangeInCash: [
+    'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect',
+    'CashAndCashEquivalentsPeriodIncreaseDecrease',
+  ],
+};
 
 export interface ReportedItem {
   concept?: string;
@@ -209,7 +222,7 @@ export function deriveReportedHistoricals(reports: ReportLike[]): HistoricalYear
     .filter((r) => r.report)
     .map((r) => {
       const m = lookupOf(r.report!);
-      return computeHistoricalIS({
+      return computeHistoricalYear({
         fiscalYear: Number((r.endDate ?? '').slice(0, 4)) || r.year || 0,
         revenue: firstOf(m, SEED_CONCEPTS.revenue),
         cogs: firstOf(m, COGS_CONCEPTS),
@@ -217,6 +230,20 @@ export function deriveReportedHistoricals(reports: ReportLike[]): HistoricalYear
         sga: firstOf(m, SEED_CONCEPTS.sga),
         da: firstOf(m, SEED_CONCEPTS.da),
         netIncome: firstOf(m, NET_INCOME_CONCEPTS),
+        totalAssets: firstOf(m, HIST_CONCEPTS.totalAssets),
+        totalLiabilities: firstOf(m, HIST_CONCEPTS.totalLiabilities),
+        totalEquity: firstOf(m, HIST_CONCEPTS.totalEquity),
+        cash: firstOf(m, HIST_CONCEPTS.cash),
+        accountsReceivable: firstOf(m, MAP.accountsReceivable[0]),
+        inventories: firstOf(m, MAP.inventories[0]),
+        otherCurrentAssets: firstOf(m, MAP.otherCurrentAssets[0]),
+        accountsPayable: firstOf(m, MAP.accountsPayable[0]),
+        otherCurrentLiabilities: firstOf(m, MAP.otherCurrentLiabilities[0]),
+        deferredRevenue: firstOf(m, MAP.deferredRevenue[0]),
+        cashFromOperations: firstOf(m, HIST_CONCEPTS.cfo),
+        cashFromInvesting: firstOf(m, HIST_CONCEPTS.cfi),
+        cashFromFinancing: firstOf(m, HIST_CONCEPTS.cff),
+        netChangeInCash: firstOf(m, HIST_CONCEPTS.netChangeInCash),
       });
     })
     .filter((h) => h.fiscalYear)
