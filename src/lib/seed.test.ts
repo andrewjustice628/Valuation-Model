@@ -15,14 +15,32 @@ describe('deriveBalanceSheetSeed', () => {
   it('omits ratios with no data', () => expect(s.deferredRevenuePctRevenue).toBeUndefined());
 });
 
-describe('revenueGrowthFromHistory', () => {
-  it('averages recent YoY growth', () => {
+describe('revenueGrowthFromHistory (geometric / CAGR)', () => {
+  it('CAGR over the period', () => {
     const g = revenueGrowthFromHistory([
       { year: 2022, revenue: 100 },
       { year: 2023, revenue: 110 },
       { year: 2024, revenue: 121 },
     ]);
-    expect(g).toBeCloseTo(0.1, 10);
+    expect(g).toBeCloseTo(0.1, 10); // (121/100)^(1/2) - 1
+  });
+  it('is geometric, not arithmetic (volatile history does not overstate)', () => {
+    // Arithmetic avg of +100% then -50% is +25%; geometric is 0%.
+    const g = revenueGrowthFromHistory([
+      { year: 2022, revenue: 100 },
+      { year: 2023, revenue: 200 },
+      { year: 2024, revenue: 100 },
+    ]);
+    expect(g).toBeCloseTo(0, 10);
+  });
+  it('uses at most the last 6 points (5 periods)', () => {
+    // Old years are noise; the last 6 points (2019–2024) are a clean 5% CAGR.
+    const hist = [
+      { year: 2016, revenue: 1 }, { year: 2017, revenue: 2 }, { year: 2018, revenue: 3 },
+      { year: 2019, revenue: 100 }, { year: 2020, revenue: 105 }, { year: 2021, revenue: 110.25 },
+      { year: 2022, revenue: 115.7625 }, { year: 2023, revenue: 121.550625 }, { year: 2024, revenue: 127.62815625 },
+    ];
+    expect(revenueGrowthFromHistory(hist)).toBeCloseTo(0.05, 8);
   });
   it('undefined with fewer than two points', () => {
     expect(revenueGrowthFromHistory([{ year: 2024, revenue: 100 }])).toBeUndefined();

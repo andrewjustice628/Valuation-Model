@@ -5,6 +5,7 @@
  */
 import { create } from 'zustand';
 import { activeProvider } from '../lib/marketData';
+import { RAMP_SEED_FIELDS } from '../lib/seed';
 import type { BaseYear, ForecastAssumptions } from '../engine/statements';
 import type { NetDebtBridge, WaccAssumptions } from '../engine/types';
 
@@ -217,12 +218,18 @@ export const useModel = create<ModelState>((set, get) => ({
           cashAndEquivalents: base.cash,
         };
         // Seed every forecast year from the company's actuals (a starting point).
+        // Rates/ratios are held flat; dollar drivers ramp at the geometric
+        // revenue-growth rate g (forecast year k value = actual × (1 + g)^k).
         const seed = r.seed ?? {};
         const seededKeys = Object.keys(seed).filter((k) => typeof seed[k] === 'number' && Number.isFinite(seed[k]));
-        const assumptions = s.assumptions.map((a) => {
+        const g = typeof seed.revenueGrowth === 'number' && Number.isFinite(seed.revenueGrowth) ? seed.revenueGrowth : 0;
+        const ramp = new Set<string>(RAMP_SEED_FIELDS);
+        const assumptions = s.assumptions.map((a, i) => {
           const na = { ...a };
           for (const k of seededKeys) {
-            if (k in na) (na as Record<string, number>)[k] = seed[k];
+            if (!(k in na)) continue;
+            const value = ramp.has(k) ? seed[k] * Math.pow(1 + g, i + 1) : seed[k];
+            (na as Record<string, number>)[k] = value;
           }
           return na;
         });
@@ -241,7 +248,8 @@ export const useModel = create<ModelState>((set, get) => ({
           financialsMessage:
             `Filled ${r.found.length} base fields + seeded ${seededKeys.length} forecast ` +
             `assumptions from ${src} (FY ${r.fiscalYear ?? '?'}), in ${cur}. ` +
-            `Starting points from actuals — review & adjust the forecast.${verify}${missing}`,
+            `Revenue growth = ${(g * 100).toFixed(1)}% (5-yr geometric avg); dollar drivers ramp with it. ` +
+            `Starting points from actuals — review & adjust.${verify}${missing}`,
         };
       });
     } catch (e) {

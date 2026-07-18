@@ -46,19 +46,35 @@ export function deriveBalanceSheetSeed(base: Record<string, number>): ForecastSe
 }
 
 /**
- * Average year-over-year revenue growth from a history of {year, revenue}.
- * Uses up to the last 3 transitions; returns undefined if insufficient data.
+ * Geometric-average (CAGR) year-over-year revenue growth over up to the last 5
+ * annual periods (6 data points), using as many as are available. Returns
+ * undefined with fewer than two points. Geometric — not arithmetic — so a
+ * volatile history doesn't overstate the trend:
+ *   CAGR = (revenue_last / revenue_first)^(1 / periods) − 1
  */
 export function revenueGrowthFromHistory(history: Array<{ year: number; revenue: number }>): number | undefined {
   const pts = history
     .filter((p) => finite(p.year) && finite(p.revenue) && p.revenue > 0)
-    .sort((a, b) => a.year - b.year);
+    .sort((a, b) => a.year - b.year)
+    .slice(-6); // last 6 points → up to 5 annual growth periods ("past 5 years")
   if (pts.length < 2) return undefined;
-  const growths: number[] = [];
-  for (let i = 1; i < pts.length; i++) growths.push(pts[i].revenue / pts[i - 1].revenue - 1);
-  const recent = growths.slice(-3);
-  return recent.reduce((a, b) => a + b, 0) / recent.length;
+  const first = pts[0].revenue;
+  const last = pts[pts.length - 1].revenue;
+  const periods = pts.length - 1;
+  const cagr = Math.pow(last / first, 1 / periods) - 1;
+  return Number.isFinite(cagr) ? cagr : undefined;
 }
+
+/**
+ * Dollar-denominated seed fields. On auto-fill these ramp across the forecast
+ * at the geometric revenue-growth rate — value in forecast year k = actual ×
+ * (1 + g)^k — so they grow (or shrink) with the business rather than sitting
+ * flat. Ratio/percentage fields are held flat (they are already relative).
+ */
+export const RAMP_SEED_FIELDS = [
+  'da', 'capex', 'stockBasedComp', 'dividends', 'shareRepurchases',
+  'interestIncome', 'interestExpense',
+] as const;
 
 /** Effective tax rate from taxes / pretax, clamped to a sane 0–60%. */
 export function effectiveTaxRate(taxes: number | undefined, pretax: number | undefined): number | undefined {

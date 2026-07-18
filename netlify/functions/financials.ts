@@ -40,7 +40,7 @@ async function fetchYahooFinancials(symbol: string) {
   const cookie = await yahooCookie();
   const types = YAHOO_TS_FIELDS.map((f) => `annual${f}`).join(',');
   const now = Math.floor(Date.now() / 1000);
-  const period1 = now - 6 * 365 * 24 * 3600;
+  const period1 = now - 8 * 365 * 24 * 3600; // ~8y back → up to ~6 annual points for the CAGR window
   const url =
     `https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(symbol)}` +
     `?symbol=${encodeURIComponent(symbol)}&type=${types}&period1=${period1}&period2=${now}&merge=false`;
