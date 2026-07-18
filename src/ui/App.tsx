@@ -5,9 +5,6 @@ import { ASSUMPTION_GROUPS, BASE_FIELDS, BRIDGE_FIELDS, WACC_FIELDS } from './ca
 
 const MULTIPLES = ['EV/EBITDA', 'P/E', 'P/S', 'P/B', 'EV/Sales'];
 
-const fmtNum = (x: number | undefined) =>
-  typeof x === 'number' && Number.isFinite(x) ? x.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
-
 function CompanyHeader() {
   const company = useModel((s) => s.company);
   const setCompany = useModel((s) => s.setCompany);
@@ -59,6 +56,7 @@ function BaseSection() {
   const base = useModel((s) => s.base);
   const setBase = useModel((s) => s.setBase);
   const historicalBase = useModel((s) => s.historicalBase);
+  const setHistorical = useModel((s) => s.setHistorical);
   const fetchFinancials = useModel((s) => s.fetchFinancials);
   const status = useModel((s) => s.financialsStatus);
   const message = useModel((s) => s.financialsMessage);
@@ -85,7 +83,11 @@ function BaseSection() {
           {BASE_FIELDS.map((f) => (
             <tr key={f.id}>
               <td className="rowhead"><FieldLabel fieldId={`base.${f.id}`} label={f.label} aka={f.aka} /></td>
-              {priors.map((p) => <td key={p.fiscalYear} className="hist">{fmtNum(p[f.id])}</td>)}
+              {priors.map((p) => (
+                <td key={p.fiscalYear} className="hist">
+                  <NumberInput value={p[f.id] ?? 0} onCommit={(n) => setHistorical(p.fiscalYear, f.id, n)} width={120} />
+                </td>
+              ))}
               <td className="fdiv"><NumberInput value={base[f.id]} onCommit={(n) => setBase(f.id, n)} width={130} /></td>
             </tr>
           ))}
@@ -93,7 +95,7 @@ function BaseSection() {
       </table>
       <p className="note">
         {priors.length > 0
-          ? 'Prior-year columns (A) are read-only reference actuals; only the latest year drives the forecast.'
+          ? 'All columns are editable. The latest year drives the forecast; prior years are the historical record.'
           : 'Auto-fill a ticker to show the prior years’ actuals beside the base year.'}
       </p>
     </details>

@@ -122,6 +122,7 @@ export interface ModelState {
   addPeer: () => void;
   removePeer: (index: number) => void;
   setLabel: (fieldId: string, label: string) => void;
+  setHistorical: (fiscalYear: number, field: string, value: number) => void;
   fetchQuote: () => Promise<void>;
   fetchPeerMultiple: (index: number) => Promise<void>;
   fetchFinancials: () => Promise<void>;
@@ -177,6 +178,12 @@ export const useModel = create<ModelState>((set, get) => ({
       else delete labels[fieldId];
       return { labels };
     }),
+  setHistorical: (fiscalYear, field, value) =>
+    set((s) => ({
+      historicalBase: s.historicalBase.map((h) =>
+        h.fiscalYear === fiscalYear ? { ...h, [field]: value } : h,
+      ),
+    })),
 
   fetchQuote: async () => {
     const ticker = get().company.ticker.trim();
