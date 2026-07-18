@@ -9,10 +9,16 @@
  * record here. Values are in the company's reporting currency, actual units.
  */
 import type { MappedFinancials, MappableField } from './financials';
+import { effectiveTaxRate, revenueGrowthFromHistory, type ForecastSeed } from './seed';
 
 /** Yahoo timeseries base field names we request (each prefixed "annual"). */
 export const YAHOO_TS_FIELDS = [
   'TotalRevenue', 'CostOfRevenue',
+  // Income-statement / cash-flow lines used to seed the forecast:
+  'ResearchAndDevelopment', 'SellingGeneralAndAdministration', 'TaxProvision', 'PretaxIncome',
+  'ReconciledDepreciation', 'CapitalExpenditure', 'StockBasedCompensation',
+  'CommonStockDividendPaid', 'RepurchaseOfCapitalStock', 'InterestExpense',
+  'InterestIncome', 'InterestIncomeNonOperating',
   'CashAndCashEquivalents', 'OtherShortTermInvestments', 'CashCashEquivalentsAndShortTermInvestments',
   'AccountsReceivable', 'Receivables', 'Inventory', 'OtherCurrentAssets',
   'NetPPE', 'Goodwill', 'OtherIntangibleAssets', 'OtherNonCurrentAssets',
@@ -67,4 +73,43 @@ export function mapYahooTimeseries(v: Record<string, number>): MappedFinancials 
   set('commonStock', n('CommonStock') ?? n('CommonStockEquity'), n('AdditionalPaidInCapital'));
 
   return { values, found, missing };
+}
+
+/** Derive forecast seed (IS/CF ratios + revenue growth) from Yahoo timeseries. */
+export function deriveYahooSeed(
+  v: Record<string, number>,
+  revenueHistory: Array<{ year: number; revenue: number }>,
+): ForecastSeed {
+  const seed: ForecastSeed = {};
+  const num = (k: string): number | undefined =>
+    typeof v[k] === 'number' && Number.isFinite(v[k]) ? v[k] : undefined;
+  const set = (k: keyof ForecastSeed, val: number | undefined) => {
+    if (typeof val === 'number' && Number.isFinite(val)) seed[k] = val;
+  };
+
+  const rev = num('TotalRevenue');
+  if (rev && rev > 0) {
+    const rd = num('ResearchAndDevelopment');
+    const sga = num('SellingGeneralAndAdministration');
+    if (rd !== undefined) set('rdPctSales', rd / rev);
+    if (sga !== undefined) set('sgaPctSales', sga / rev);
+  }
+  set('taxRate', effectiveTaxRate(num('TaxProvision'), num('PretaxIncome')));
+  set('da', num('ReconciledDepreciation'));
+  // Yahoo cash-flow outflows are negative — take magnitudes.
+  const capex = num('CapitalExpenditure');
+  if (capex !== undefined) set('capex', Math.abs(capex));
+  set('stockBasedComp', num('StockBasedCompensation'));
+  const div = num('CommonStockDividendPaid');
+  if (div !== undefined) set('dividends', Math.abs(div));
+  const bb = num('RepurchaseOfCapitalStock');
+  if (bb !== undefined) set('shareRepurchases', Math.abs(bb));
+  const ie = num('InterestExpense');
+  if (ie !== undefined) set('interestExpense', Math.abs(ie));
+  const ii = num('InterestIncome') ?? num('InterestIncomeNonOperating');
+  if (ii !== undefined) set('interestIncome', Math.abs(ii));
+
+  const growth = revenueGrowthFromHistory(revenueHistory);
+  if (growth !== undefined) seed.revenueGrowth = growth;
+  return seed;
 }

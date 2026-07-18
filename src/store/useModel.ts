@@ -216,8 +216,18 @@ export const useModel = create<ModelState>((set, get) => ({
           debt: base.longTermDebt + base.commercialPaper,
           cashAndEquivalents: base.cash,
         };
+        // Seed every forecast year from the company's actuals (a starting point).
+        const seed = r.seed ?? {};
+        const seededKeys = Object.keys(seed).filter((k) => typeof seed[k] === 'number' && Number.isFinite(seed[k]));
+        const assumptions = s.assumptions.map((a) => {
+          const na = { ...a };
+          for (const k of seededKeys) {
+            if (k in na) (na as Record<string, number>)[k] = seed[k];
+          }
+          return na;
+        });
         const missing = r.missing.length
-          ? ` Enter manually: ${r.missing.join(', ')}.`
+          ? ` Base fields to enter manually: ${r.missing.join(', ')}.`
           : '';
         const src = r.source === 'yahoo' ? 'Yahoo Finance' : r.form ?? 'filing';
         const cur = r.currency ?? 'actual';
@@ -225,11 +235,13 @@ export const useModel = create<ModelState>((set, get) => ({
         return {
           base,
           bridge,
+          assumptions,
           company: { ...s.company, unit: cur === 'USD' ? 'Actual ($)' : `Actual (${cur})` },
           financialsStatus: 'ok',
           financialsMessage:
-            `Filled ${r.found.length} fields from ${src} (FY ${r.fiscalYear ?? '?'}). ` +
-            `Values are in ${cur} units — enter forecast inputs to match.${verify}${missing}`,
+            `Filled ${r.found.length} base fields + seeded ${seededKeys.length} forecast ` +
+            `assumptions from ${src} (FY ${r.fiscalYear ?? '?'}), in ${cur}. ` +
+            `Starting points from actuals — review & adjust the forecast.${verify}${missing}`,
         };
       });
     } catch (e) {

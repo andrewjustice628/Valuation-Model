@@ -34,6 +34,7 @@ export interface MappedFinancialsResponse {
   endDate: string | null;
   currency: string | null;
   values: Record<string, number>;
+  seed: Record<string, number>;
   found: string[];
   missing: string[];
 }
@@ -75,6 +76,7 @@ export const netlifyQuoteProvider: MarketDataProvider = {
       endDate: data.endDate ?? null,
       currency: data.currency ?? null,
       values: data.values ?? {},
+      seed: data.seed ?? {},
       found: data.found ?? [],
       missing: data.missing ?? [],
     };

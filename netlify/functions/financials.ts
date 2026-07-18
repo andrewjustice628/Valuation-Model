@@ -3,8 +3,9 @@
  * them to our canonical base-year fields (mapping is shared, pure, tested code
  * in src/lib/financials.ts). Key stays server-side. Values are raw dollars.
  */
-import { mapReportedFinancials, type ReportedFinancials } from '../../src/lib/financials';
-import { mapYahooTimeseries, YAHOO_TS_FIELDS } from '../../src/lib/yahooFinancials';
+import { mapReportedFinancials, deriveReportedSeed, type ReportedFinancials } from '../../src/lib/financials';
+import { mapYahooTimeseries, deriveYahooSeed, YAHOO_TS_FIELDS } from '../../src/lib/yahooFinancials';
+import { deriveBalanceSheetSeed } from '../../src/lib/seed';
 
 export const config = { path: '/api/financials' };
 
@@ -52,6 +53,7 @@ async function fetchYahooFinancials(symbol: string) {
   const series = data.timeseries?.result ?? [];
 
   const values: Record<string, number> = {};
+  let revenueHistory: Array<{ year: number; revenue: number }> = [];
   let endDate: string | null = null;
   let currency: string | null = null;
 
@@ -69,9 +71,15 @@ async function fetchYahooFinancials(symbol: string) {
     values[type.replace(/^annual/, '')] = p.reportedValue!.raw as number;
     if (!endDate || (p.asOfDate ?? '') > endDate) endDate = p.asOfDate ?? endDate;
     if (!currency && p.currencyCode) currency = p.currencyCode;
+    if (type === 'annualTotalRevenue') {
+      revenueHistory = points.map((q) => ({
+        year: Number((q.asOfDate ?? '').slice(0, 4)),
+        revenue: q.reportedValue!.raw as number,
+      }));
+    }
   }
 
-  return { values, endDate, currency };
+  return { values, revenueHistory, endDate, currency };
 }
 
 interface ReportRow {
@@ -108,6 +116,7 @@ export default async (req: Request): Promise<Response> => {
       reports.sort((a, b) => (b.endDate ?? '').localeCompare(a.endDate ?? ''));
       const latest = reports[0];
       const mapped = mapReportedFinancials(latest.report ?? {});
+      const seed = { ...deriveBalanceSheetSeed(mapped.values as Record<string, number>), ...deriveReportedSeed(reports) };
       return json({
         symbol,
         source: 'sec',
@@ -115,6 +124,7 @@ export default async (req: Request): Promise<Response> => {
         form: latest.form ?? null,
         endDate: latest.endDate ?? null,
         currency: 'USD',
+        seed,
         ...mapped,
       });
     }
@@ -124,6 +134,7 @@ export default async (req: Request): Promise<Response> => {
       const y = await fetchYahooFinancials(symbol);
       const mapped = mapYahooTimeseries(y.values);
       if (mapped.found.length > 0) {
+        const seed = { ...deriveBalanceSheetSeed(mapped.values as Record<string, number>), ...deriveYahooSeed(y.values, y.revenueHistory) };
         return json({
           symbol,
           source: 'yahoo',
@@ -131,6 +142,7 @@ export default async (req: Request): Promise<Response> => {
           form: 'Yahoo Finance',
           endDate: y.endDate,
           currency: y.currency,
+          seed,
           ...mapped,
         });
       }

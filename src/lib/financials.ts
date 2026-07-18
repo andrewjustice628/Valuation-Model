@@ -8,6 +8,7 @@
  * Netlify function; unit-tested with a realistic payload shape.
  */
 import type { BaseYear } from '../engine/statements';
+import { effectiveTaxRate, revenueGrowthFromHistory, type ForecastSeed } from './seed';
 
 export interface ReportedItem {
   concept?: string;
@@ -113,4 +114,87 @@ export function mapReportedFinancials(report: ReportedFinancials): MappedFinanci
   }
 
   return { values, found, missing };
+}
+
+// ---- Forecast seed from as-reported income statement + cash flow ----
+
+const SEED_CONCEPTS = {
+  revenue: ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues', 'RevenueFromContractWithCustomerIncludingAssessedTax', 'SalesRevenueNet'],
+  rd: ['ResearchAndDevelopmentExpense'],
+  sga: ['SellingGeneralAndAdministrativeExpense', 'GeneralAndAdministrativeExpense'],
+  tax: ['IncomeTaxExpenseBenefit'],
+  pretax: [
+    'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
+    'IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
+  ],
+  da: ['DepreciationDepletionAndAmortization', 'DepreciationAmortizationAndAccretionNet', 'DepreciationAndAmortization'],
+  capex: ['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsForCapitalImprovements', 'PaymentsToAcquireProductiveAssets'],
+  sbc: ['ShareBasedCompensation'],
+  dividends: ['PaymentsOfDividendsCommonStock', 'PaymentsOfDividends'],
+  buybacks: ['PaymentsForRepurchaseOfCommonStock'],
+  interestExpense: ['InterestExpense', 'InterestExpenseDebt'],
+  interestIncome: ['InvestmentIncomeInterest', 'InterestAndDividendIncomeOperating'],
+};
+
+function lookupOf(report: ReportedFinancials): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const arr of [report.ic, report.bs, report.cf]) {
+    if (!arr) continue;
+    for (const item of arr) {
+      const tag = normalize(item.concept);
+      const num = typeof item.value === 'number' ? item.value : parseFloat(String(item.value));
+      if (tag && Number.isFinite(num) && !m.has(tag)) m.set(tag, num);
+    }
+  }
+  return m;
+}
+
+const firstOf = (m: Map<string, number>, cands: string[]): number | undefined => {
+  for (const c of cands) {
+    const v = m.get(c.toLowerCase());
+    if (v !== undefined) return v;
+  }
+  return undefined;
+};
+
+export interface ReportLike {
+  year?: number;
+  endDate?: string;
+  report?: ReportedFinancials;
+}
+
+/** Derive income-statement / cash-flow ratios + revenue growth from filings. */
+export function deriveReportedSeed(reports: ReportLike[]): ForecastSeed {
+  const withReport = reports.filter((r) => r.report);
+  if (withReport.length === 0) return {};
+  const sorted = [...withReport].sort((a, b) => (b.endDate ?? '').localeCompare(a.endDate ?? ''));
+  const latest = lookupOf(sorted[0].report!);
+  const seed: ForecastSeed = {};
+
+  const rev = firstOf(latest, SEED_CONCEPTS.revenue);
+  const set = (k: keyof ForecastSeed, v: number | undefined) => {
+    if (typeof v === 'number' && Number.isFinite(v)) seed[k] = v;
+  };
+  if (rev && rev > 0) {
+    const rd = firstOf(latest, SEED_CONCEPTS.rd);
+    const sga = firstOf(latest, SEED_CONCEPTS.sga);
+    if (rd !== undefined) set('rdPctSales', rd / rev);
+    if (sga !== undefined) set('sgaPctSales', sga / rev);
+  }
+  set('taxRate', effectiveTaxRate(firstOf(latest, SEED_CONCEPTS.tax), firstOf(latest, SEED_CONCEPTS.pretax)));
+  set('da', firstOf(latest, SEED_CONCEPTS.da));
+  set('capex', firstOf(latest, SEED_CONCEPTS.capex));
+  set('stockBasedComp', firstOf(latest, SEED_CONCEPTS.sbc));
+  set('dividends', firstOf(latest, SEED_CONCEPTS.dividends));
+  set('shareRepurchases', firstOf(latest, SEED_CONCEPTS.buybacks));
+  set('interestExpense', firstOf(latest, SEED_CONCEPTS.interestExpense));
+  set('interestIncome', firstOf(latest, SEED_CONCEPTS.interestIncome));
+
+  const history = sorted
+    .map((r) => ({ year: Number((r.endDate ?? '').slice(0, 4)) || r.year || 0, revenue: firstOf(lookupOf(r.report!), SEED_CONCEPTS.revenue) ?? NaN }))
+    .filter((p) => p.year && Number.isFinite(p.revenue));
+  const growth = revenueGrowthFromHistory(history);
+  if (growth !== undefined) seed.revenueGrowth = growth;
+
+  return seed;
 }
