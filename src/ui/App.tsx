@@ -106,6 +106,9 @@ function AssumptionsSection() {
   const assumptions = useModel((s) => s.assumptions);
   const setAssumption = useModel((s) => s.setAssumption);
   const copyAcross = useModel((s) => s.copyAcross);
+  const resetGrowthAuto = useModel((s) => s.resetGrowthAuto);
+  const growthManual = useModel((s) => s.revenueGrowthManual);
+  const anyManual = growthManual.some(Boolean);
   return (
     <details open>
       <summary>Forecast assumptions</summary>
@@ -125,9 +128,12 @@ function AssumptionsSection() {
                   <td className="rowhead">
                     <FieldLabel fieldId={`assum.${f.id}`} label={f.label} aka={f.aka} />
                     <button className="copy" title="Copy first year across" onClick={() => copyAcross(f.id)}>→</button>
+                    {f.id === 'revenueGrowth' && anyManual && (
+                      <button className="copy" title="Reset growth to the auto CAGR of the historicals" onClick={resetGrowthAuto}>↺</button>
+                    )}
                   </td>
                   {assumptions.map((a, i) => (
-                    <td key={a.fiscalYear}>
+                    <td key={a.fiscalYear} className={f.id === 'revenueGrowth' && growthManual[i] ? 'manual' : undefined}>
                       <NumberInput value={a[f.id]} percent={f.percent} onCommit={(n) => setAssumption(i, f.id, n)} width={72} />
                     </td>
                   ))}
@@ -135,6 +141,9 @@ function AssumptionsSection() {
               ))}
             </tbody>
           </table>
+          {group.title === 'Income statement drivers' && (
+            <p className="note">Revenue growth auto-updates from the historical CAGR as you edit actuals; edit a cell to override it ({anyManual ? 'overrides active — ↺ to reset' : 'none overridden'}).</p>
+          )}
         </div>
       ))}
     </details>

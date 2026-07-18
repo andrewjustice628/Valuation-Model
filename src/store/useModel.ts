@@ -5,7 +5,7 @@
  */
 import { create } from 'zustand';
 import { activeProvider } from '../lib/marketData';
-import { RAMP_SEED_FIELDS } from '../lib/seed';
+import { RAMP_SEED_FIELDS, revenueGrowthFromHistory } from '../lib/seed';
 import type { HistoricalYear } from '../lib/historicals';
 import type { BaseYear, ForecastAssumptions } from '../engine/statements';
 import type { NetDebtBridge, WaccAssumptions } from '../engine/types';
@@ -94,6 +94,29 @@ const defaultBridge: NetDebtBridge = {
   cashAndEquivalents: 100, equityInvestments: 0,
 };
 
+const NO_MANUAL = [false, false, false, false, false];
+
+/** Geometric CAGR from the editable prior years + the (editable) latest year. */
+function growthFromHistory(base: BaseYear, historicalBase: Array<Record<string, number>>): number | undefined {
+  const priors = historicalBase.filter((h) => h.fiscalYear < base.fiscalYear);
+  return revenueGrowthFromHistory([
+    ...priors.map((p) => ({ year: p.fiscalYear, revenue: p.revenue })),
+    { year: base.fiscalYear, revenue: base.revenue },
+  ]);
+}
+
+/** Push the auto-derived growth into every forecast year that isn't overridden. */
+function applyAutoGrowth(
+  base: BaseYear,
+  historicalBase: Array<Record<string, number>>,
+  assumptions: ForecastAssumptions[],
+  manual: boolean[],
+): ForecastAssumptions[] {
+  const g = growthFromHistory(base, historicalBase);
+  if (g === undefined) return assumptions;
+  return assumptions.map((a, i) => (manual[i] ? a : { ...a, revenueGrowth: g }));
+}
+
 export interface ModelState {
   company: CompanyInfo;
   base: BaseYear;
@@ -105,6 +128,8 @@ export interface ModelState {
   labels: Record<string, string>;
   historicals: HistoricalYear[];
   historicalBase: Array<Record<string, number>>;
+  /** Per-forecast-year flag: true = user overrode revenue growth (stop auto). */
+  revenueGrowthManual: boolean[];
   quoteStatus: FetchStatus;
   quoteError: string | null;
   financialsStatus: FetchStatus;
@@ -123,6 +148,7 @@ export interface ModelState {
   removePeer: (index: number) => void;
   setLabel: (fieldId: string, label: string) => void;
   setHistorical: (fiscalYear: number, field: string, value: number) => void;
+  resetGrowthAuto: () => void;
   fetchQuote: () => Promise<void>;
   fetchPeerMultiple: (index: number) => Promise<void>;
   fetchFinancials: () => Promise<void>;
@@ -147,21 +173,32 @@ export const useModel = create<ModelState>((set, get) => ({
   labels: {},
   historicals: [],
   historicalBase: [],
+  revenueGrowthManual: [...NO_MANUAL],
   quoteStatus: 'idle',
   quoteError: null,
   financialsStatus: 'idle',
   financialsMessage: null,
 
   setCompany: (patch) => set((s) => ({ company: { ...s.company, ...patch } })),
-  setBase: (field, value) => set((s) => ({ base: { ...s.base, [field]: value } })),
+  setBase: (field, value) =>
+    set((s) => {
+      const base = { ...s.base, [field]: value };
+      if (field !== 'revenue') return { base };
+      return { base, assumptions: applyAutoGrowth(base, s.historicalBase, s.assumptions, s.revenueGrowthManual) };
+    }),
   setAssumption: (index, field, value) =>
-    set((s) => ({
-      assumptions: s.assumptions.map((a, i) => (i === index ? { ...a, [field]: value } : a)),
-    })),
+    set((s) => {
+      const assumptions = s.assumptions.map((a, i) => (i === index ? { ...a, [field]: value } : a));
+      if (field !== 'revenueGrowth') return { assumptions };
+      // Manually editing a growth cell detaches it from the auto CAGR.
+      return { assumptions, revenueGrowthManual: s.revenueGrowthManual.map((m, i) => (i === index ? true : m)) };
+    }),
   copyAcross: (field) =>
     set((s) => {
       const v = s.assumptions[0][field];
-      return { assumptions: s.assumptions.map((a) => ({ ...a, [field]: v })) };
+      const assumptions = s.assumptions.map((a) => ({ ...a, [field]: v }));
+      if (field !== 'revenueGrowth') return { assumptions };
+      return { assumptions, revenueGrowthManual: s.revenueGrowthManual.map(() => true) };
     }),
   setWacc: (field, value) => set((s) => ({ wacc: { ...s.wacc, [field]: value } })),
   setBridge: (field, value) => set((s) => ({ bridge: { ...s.bridge, [field]: value } })),
@@ -179,10 +216,17 @@ export const useModel = create<ModelState>((set, get) => ({
       return { labels };
     }),
   setHistorical: (fiscalYear, field, value) =>
-    set((s) => ({
-      historicalBase: s.historicalBase.map((h) =>
+    set((s) => {
+      const historicalBase = s.historicalBase.map((h) =>
         h.fiscalYear === fiscalYear ? { ...h, [field]: value } : h,
-      ),
+      );
+      if (field !== 'revenue') return { historicalBase };
+      return { historicalBase, assumptions: applyAutoGrowth(s.base, historicalBase, s.assumptions, s.revenueGrowthManual) };
+    }),
+  resetGrowthAuto: () =>
+    set((s) => ({
+      revenueGrowthManual: [...NO_MANUAL],
+      assumptions: applyAutoGrowth(s.base, s.historicalBase, s.assumptions, NO_MANUAL),
     })),
 
   fetchQuote: async () => {
@@ -262,6 +306,7 @@ export const useModel = create<ModelState>((set, get) => ({
         return {
           base,
           assumptions,
+          revenueGrowthManual: [...NO_MANUAL],
           historicals: r.historicals ?? [],
           historicalBase: r.historicalBase ?? [],
           company: { ...s.company, unit: cur === 'USD' ? 'Actual ($)' : `Actual (${cur})` },
