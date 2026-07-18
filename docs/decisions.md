@@ -33,6 +33,9 @@ fin-* pattern (decode → spec → decisions → fixtures → engine → store �
   for a company you've modeled) so the engine can be pinned to exact parity?
   Until then, engine tests assert against formula definitions + a hand-built
   worked example.
+  **2026-07-17: Andrew opted to validate by live use rather than supply a
+  filled workbook for now.** Golden-parity extraction deferred until/if a
+  populated sheet is provided.
 - **O2 — Quirk sign-offs.** Confirm dispositions for spec Q1 (terminal-value
   double-discount), Q2 (inverted EBITDA margin), Q3 (D&A sign convention).
   Default proposal: fix all three; document each as an intentional deviation.

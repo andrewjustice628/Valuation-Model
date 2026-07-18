@@ -35,7 +35,18 @@ export default async (req: Request): Promise<Response> => {
     if (!res.ok) return json({ error: `Provider error (${res.status}).` }, 502);
     const data = (await res.json()) as { data?: ReportRow[] };
     const reports = (data.data ?? []).filter((r) => r.report);
-    if (reports.length === 0) return json({ error: `No filings found for "${symbol}".` }, 404);
+    if (reports.length === 0) {
+      return json(
+        {
+          error:
+            `No SEC filing found for "${symbol}". Auto-fill covers companies that file ` +
+            `with the SEC (US companies and foreign filers with a 20-F). For others ` +
+            `(e.g. many non-US names), enter the base year manually — price and shares ` +
+            `still fill via "Fetch quote".`,
+        },
+        404,
+      );
+    }
 
     // Latest annual report by end date.
     reports.sort((a, b) => (b.endDate ?? '').localeCompare(a.endDate ?? ''));
