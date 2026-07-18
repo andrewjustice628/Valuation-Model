@@ -1,4 +1,4 @@
-import { useModel } from '../store/useModel';
+import { useModel, AUTO_FIELDS } from '../store/useModel';
 import { NumberInput, FieldLabel } from './fields';
 import { Results } from './Results';
 import { ASSUMPTION_GROUPS, BASE_FIELDS, BRIDGE_FIELDS, WACC_FIELDS } from './catalog';
@@ -106,12 +106,16 @@ function AssumptionsSection() {
   const assumptions = useModel((s) => s.assumptions);
   const setAssumption = useModel((s) => s.setAssumption);
   const copyAcross = useModel((s) => s.copyAcross);
-  const resetGrowthAuto = useModel((s) => s.resetGrowthAuto);
-  const growthManual = useModel((s) => s.revenueGrowthManual);
-  const anyManual = growthManual.some(Boolean);
+  const resetAuto = useModel((s) => s.resetAuto);
+  const overrides = useModel((s) => s.manualOverrides);
   return (
     <details open>
       <summary>Forecast assumptions</summary>
+      <p className="note">
+        Fields derived from history (revenue growth, gross margin, and the balance-sheet
+        ratios) auto-update as you edit the actuals. Edit any cell to override it (shown in
+        accent); ↺ resets that row to the live formula.
+      </p>
       {ASSUMPTION_GROUPS.map((group) => (
         <div className="assum-group" key={group.title}>
           <h4>{group.title}</h4>
@@ -123,27 +127,28 @@ function AssumptionsSection() {
               </tr>
             </thead>
             <tbody>
-              {group.fields.map((f) => (
-                <tr key={f.id}>
-                  <td className="rowhead">
-                    <FieldLabel fieldId={`assum.${f.id}`} label={f.label} aka={f.aka} />
-                    <button className="copy" title="Copy first year across" onClick={() => copyAcross(f.id)}>→</button>
-                    {f.id === 'revenueGrowth' && anyManual && (
-                      <button className="copy" title="Reset growth to the auto CAGR of the historicals" onClick={resetGrowthAuto}>↺</button>
-                    )}
-                  </td>
-                  {assumptions.map((a, i) => (
-                    <td key={a.fiscalYear} className={f.id === 'revenueGrowth' && growthManual[i] ? 'manual' : undefined}>
-                      <NumberInput value={a[f.id]} percent={f.percent} onCommit={(n) => setAssumption(i, f.id, n)} width={72} />
+              {group.fields.map((f) => {
+                const auto = AUTO_FIELDS.has(f.id);
+                const rowOverrides = overrides[f.id];
+                return (
+                  <tr key={f.id}>
+                    <td className="rowhead">
+                      <FieldLabel fieldId={`assum.${f.id}`} label={f.label} aka={auto ? 'auto from history' : f.aka} />
+                      <button className="copy" title="Copy first year across" onClick={() => copyAcross(f.id)}>→</button>
+                      {auto && rowOverrides?.some(Boolean) && (
+                        <button className="copy" title="Reset this row to the auto value from history" onClick={() => resetAuto(f.id)}>↺</button>
+                      )}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    {assumptions.map((a, i) => (
+                      <td key={a.fiscalYear} className={auto && rowOverrides?.[i] ? 'manual' : undefined}>
+                        <NumberInput value={a[f.id]} percent={f.percent} onCommit={(n) => setAssumption(i, f.id, n)} width={72} />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-          {group.title === 'Income statement drivers' && (
-            <p className="note">Revenue growth auto-updates from the historical CAGR as you edit actuals; edit a cell to override it ({anyManual ? 'overrides active — ↺ to reset' : 'none overridden'}).</p>
-          )}
         </div>
       ))}
     </details>

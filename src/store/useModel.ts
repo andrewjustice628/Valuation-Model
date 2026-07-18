@@ -94,8 +94,6 @@ const defaultBridge: NetDebtBridge = {
   cashAndEquivalents: 100, equityInvestments: 0,
 };
 
-const NO_MANUAL = [false, false, false, false, false];
-
 /** Geometric CAGR from the editable prior years + the (editable) latest year. */
 function growthFromHistory(base: BaseYear, historicalBase: Array<Record<string, number>>): number | undefined {
   const priors = historicalBase.filter((h) => h.fiscalYear < base.fiscalYear);
@@ -105,17 +103,57 @@ function growthFromHistory(base: BaseYear, historicalBase: Array<Record<string, 
   ]);
 }
 
-/** Push the auto-derived growth into every forecast year that isn't overridden. */
-function applyAutoGrowth(
+/**
+ * Ratios derived by looking back at the (editable) base-year actuals. Each
+ * recomputes live when the underlying base figures are edited.
+ */
+const RATIO_FROM_BASE: Record<string, (b: BaseYear) => number | undefined> = {
+  grossMargin: (b) => (b.revenue > 0 ? (b.revenue - b.cogs) / b.revenue : undefined),
+  arPctRevenue: (b) => (b.revenue > 0 ? b.accountsReceivable / b.revenue : undefined),
+  invPctCogs: (b) => (b.cogs > 0 ? b.inventories / b.cogs : undefined),
+  otherCurrentAssetsPctRevenue: (b) => (b.revenue > 0 ? b.otherCurrentAssets / b.revenue : undefined),
+  apPctCogs: (b) => (b.cogs > 0 ? b.accountsPayable / b.cogs : undefined),
+  otherCurrentLiabilitiesPctRevenue: (b) => (b.revenue > 0 ? b.otherCurrentLiabilities / b.revenue : undefined),
+  deferredRevenuePctRevenue: (b) => (b.revenue > 0 ? b.deferredRevenue / b.revenue : undefined),
+  otherNonCurrentAssetsPctRevenue: (b) => (b.revenue > 0 ? b.otherNonCurrentAssets / b.revenue : undefined),
+  otherNonCurrentLiabilitiesPctRevenue: (b) => (b.revenue > 0 ? b.otherNonCurrentLiabilities / b.revenue : undefined),
+};
+
+/** Assumption fields that auto-derive from historical actuals. */
+export const AUTO_FIELDS = new Set<string>(['revenueGrowth', ...Object.keys(RATIO_FROM_BASE)]);
+
+function autoValue(field: string, base: BaseYear, historicalBase: Array<Record<string, number>>): number | undefined {
+  if (field === 'revenueGrowth') return growthFromHistory(base, historicalBase);
+  return RATIO_FROM_BASE[field]?.(base);
+}
+
+/** Recompute every auto field into the forecast years that aren't overridden. */
+function applyAuto(
   base: BaseYear,
   historicalBase: Array<Record<string, number>>,
   assumptions: ForecastAssumptions[],
-  manual: boolean[],
+  overrides: Record<string, boolean[]>,
 ): ForecastAssumptions[] {
-  const g = growthFromHistory(base, historicalBase);
-  if (g === undefined) return assumptions;
-  return assumptions.map((a, i) => (manual[i] ? a : { ...a, revenueGrowth: g }));
+  return assumptions.map((a, i) => {
+    const na = { ...a } as Record<string, number>;
+    for (const field of AUTO_FIELDS) {
+      if (overrides[field]?.[i]) continue;
+      const v = autoValue(field, base, historicalBase);
+      if (v !== undefined) na[field] = v;
+    }
+    return na as unknown as ForecastAssumptions;
+  });
 }
+
+const markOverride = (o: Record<string, boolean[]>, field: string, index: number): Record<string, boolean[]> => {
+  const arr = o[field] ? [...o[field]] : [false, false, false, false, false];
+  arr[index] = true;
+  return { ...o, [field]: arr };
+};
+const markAll = (o: Record<string, boolean[]>, field: string): Record<string, boolean[]> => ({
+  ...o,
+  [field]: [true, true, true, true, true],
+});
 
 export interface ModelState {
   company: CompanyInfo;
@@ -128,8 +166,8 @@ export interface ModelState {
   labels: Record<string, string>;
   historicals: HistoricalYear[];
   historicalBase: Array<Record<string, number>>;
-  /** Per-forecast-year flag: true = user overrode revenue growth (stop auto). */
-  revenueGrowthManual: boolean[];
+  /** Per auto-field, per-forecast-year: true = user overrode it (stop auto). */
+  manualOverrides: Record<string, boolean[]>;
   quoteStatus: FetchStatus;
   quoteError: string | null;
   financialsStatus: FetchStatus;
@@ -148,7 +186,7 @@ export interface ModelState {
   removePeer: (index: number) => void;
   setLabel: (fieldId: string, label: string) => void;
   setHistorical: (fiscalYear: number, field: string, value: number) => void;
-  resetGrowthAuto: () => void;
+  resetAuto: (field: string) => void;
   fetchQuote: () => Promise<void>;
   fetchPeerMultiple: (index: number) => Promise<void>;
   fetchFinancials: () => Promise<void>;
@@ -173,7 +211,7 @@ export const useModel = create<ModelState>((set, get) => ({
   labels: {},
   historicals: [],
   historicalBase: [],
-  revenueGrowthManual: [...NO_MANUAL],
+  manualOverrides: {},
   quoteStatus: 'idle',
   quoteError: null,
   financialsStatus: 'idle',
@@ -183,22 +221,22 @@ export const useModel = create<ModelState>((set, get) => ({
   setBase: (field, value) =>
     set((s) => {
       const base = { ...s.base, [field]: value };
-      if (field !== 'revenue') return { base };
-      return { base, assumptions: applyAutoGrowth(base, s.historicalBase, s.assumptions, s.revenueGrowthManual) };
+      // Editing any base actual re-derives the history-based assumptions.
+      return { base, assumptions: applyAuto(base, s.historicalBase, s.assumptions, s.manualOverrides) };
     }),
   setAssumption: (index, field, value) =>
     set((s) => {
       const assumptions = s.assumptions.map((a, i) => (i === index ? { ...a, [field]: value } : a));
-      if (field !== 'revenueGrowth') return { assumptions };
-      // Manually editing a growth cell detaches it from the auto CAGR.
-      return { assumptions, revenueGrowthManual: s.revenueGrowthManual.map((m, i) => (i === index ? true : m)) };
+      if (!AUTO_FIELDS.has(field)) return { assumptions };
+      // Manually editing an auto field detaches that cell from the live formula.
+      return { assumptions, manualOverrides: markOverride(s.manualOverrides, field, index) };
     }),
   copyAcross: (field) =>
     set((s) => {
       const v = s.assumptions[0][field];
       const assumptions = s.assumptions.map((a) => ({ ...a, [field]: v }));
-      if (field !== 'revenueGrowth') return { assumptions };
-      return { assumptions, revenueGrowthManual: s.revenueGrowthManual.map(() => true) };
+      if (!AUTO_FIELDS.has(field)) return { assumptions };
+      return { assumptions, manualOverrides: markAll(s.manualOverrides, field) };
     }),
   setWacc: (field, value) => set((s) => ({ wacc: { ...s.wacc, [field]: value } })),
   setBridge: (field, value) => set((s) => ({ bridge: { ...s.bridge, [field]: value } })),
@@ -221,13 +259,14 @@ export const useModel = create<ModelState>((set, get) => ({
         h.fiscalYear === fiscalYear ? { ...h, [field]: value } : h,
       );
       if (field !== 'revenue') return { historicalBase };
-      return { historicalBase, assumptions: applyAutoGrowth(s.base, historicalBase, s.assumptions, s.revenueGrowthManual) };
+      return { historicalBase, assumptions: applyAuto(s.base, historicalBase, s.assumptions, s.manualOverrides) };
     }),
-  resetGrowthAuto: () =>
-    set((s) => ({
-      revenueGrowthManual: [...NO_MANUAL],
-      assumptions: applyAutoGrowth(s.base, s.historicalBase, s.assumptions, NO_MANUAL),
-    })),
+  resetAuto: (field) =>
+    set((s) => {
+      const manualOverrides = { ...s.manualOverrides };
+      delete manualOverrides[field];
+      return { manualOverrides, assumptions: applyAuto(s.base, s.historicalBase, s.assumptions, manualOverrides) };
+    }),
 
   fetchQuote: async () => {
     const ticker = get().company.ticker.trim();
@@ -306,7 +345,7 @@ export const useModel = create<ModelState>((set, get) => ({
         return {
           base,
           assumptions,
-          revenueGrowthManual: [...NO_MANUAL],
+          manualOverrides: {},
           historicals: r.historicals ?? [],
           historicalBase: r.historicalBase ?? [],
           company: { ...s.company, unit: cur === 'USD' ? 'Actual ($)' : `Actual (${cur})` },
