@@ -1,35 +1,34 @@
 /**
- * Maps Yahoo Finance's quoteSummary statement objects onto our canonical
- * base-year fields. Used as the international fallback when a company has no
- * SEC filing (Finnhub's source). Pure module; the network/crumb fetching lives
- * in the Netlify function.
+ * Maps Yahoo Finance's fundamentals-timeseries data onto our canonical
+ * base-year fields — the international fallback when a company has no SEC
+ * filing. Yahoo's legacy quoteSummary balance-sheet module is deprecated
+ * (returns empty), so we use the timeseries endpoint's field taxonomy.
  *
- * Yahoo statement values look like { raw: number, fmt: string } (or are absent).
- * Values are in the company's reporting currency and actual units.
+ * Pure module; the Netlify function does the network fetch, flattens each
+ * series to its latest annual value, and passes a { baseFieldName: number }
+ * record here. Values are in the company's reporting currency, actual units.
  */
 import type { MappedFinancials, MappableField } from './financials';
 
-export interface YahooValue {
-  raw?: number;
-}
-export type YahooStatement = Record<string, YahooValue | number | undefined>;
+/** Yahoo timeseries base field names we request (each prefixed "annual"). */
+export const YAHOO_TS_FIELDS = [
+  'TotalRevenue', 'CostOfRevenue',
+  'CashAndCashEquivalents', 'OtherShortTermInvestments', 'CashCashEquivalentsAndShortTermInvestments',
+  'AccountsReceivable', 'Receivables', 'Inventory', 'OtherCurrentAssets',
+  'NetPPE', 'Goodwill', 'OtherIntangibleAssets', 'OtherNonCurrentAssets',
+  'AccountsPayable', 'Payables', 'OtherCurrentLiabilities', 'CurrentDeferredRevenue',
+  'CommercialPaper', 'LongTermDebt', 'CurrentDebt', 'OtherNonCurrentLiabilities',
+  'RetainedEarnings', 'CommonStock', 'AdditionalPaidInCapital', 'CommonStockEquity',
+  'GainsLossesNotAffectingRetainedEarnings',
+] as const;
 
-/** Pull a numeric value from a Yahoo field ({raw} | number | absent). */
-function num(stmt: YahooStatement | undefined, key: string): number | undefined {
-  const v = stmt?.[key];
-  if (v == null) return undefined;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
-  const r = v.raw;
-  return typeof r === 'number' && Number.isFinite(r) ? r : undefined;
-}
-
-export function mapYahooFinancials(
-  income: YahooStatement | undefined,
-  balance: YahooStatement | undefined,
-): MappedFinancials {
+export function mapYahooTimeseries(v: Record<string, number>): MappedFinancials {
   const values: Partial<Record<MappableField, number>> = {};
   const found: MappableField[] = [];
   const missing: MappableField[] = [];
+
+  const n = (key: string): number | undefined =>
+    typeof v[key] === 'number' && Number.isFinite(v[key]) ? v[key] : undefined;
 
   // Sum whatever components are present; "found" if at least one is.
   const set = (field: MappableField, ...parts: (number | undefined)[]) => {
@@ -42,29 +41,23 @@ export function mapYahooFinancials(
     found.push(field);
   };
 
-  set('revenue', num(income, 'totalRevenue'));
-  set('cogs', num(income, 'costOfRevenue'));
-  set('cash', num(balance, 'cash'), num(balance, 'shortTermInvestments'));
-  set('accountsReceivable', num(balance, 'netReceivables'));
-  set('inventories', num(balance, 'inventory'));
-  set('otherCurrentAssets', num(balance, 'otherCurrentAssets'));
-  set('ppe', num(balance, 'propertyPlantEquipment'));
-  set(
-    'otherNonCurrentAssets',
-    num(balance, 'otherAssets'),
-    num(balance, 'goodWill'),
-    num(balance, 'intangibleAssets'),
-    num(balance, 'longTermInvestments'),
-  );
-  set('accountsPayable', num(balance, 'accountsPayable'));
-  set('otherCurrentLiabilities', num(balance, 'otherCurrentLiab'));
-  set('deferredRevenue'); // not in Yahoo's legacy schema → manual
-  set('commercialPaper'); // not available → manual
-  set('longTermDebt', num(balance, 'longTermDebt'), num(balance, 'shortLongTermDebt'));
-  set('otherNonCurrentLiabilities', num(balance, 'otherLiab'));
-  set('retainedEarnings', num(balance, 'retainedEarnings'));
-  set('otherComprehensiveIncome', num(balance, 'otherStockholderEquity'));
-  set('commonStock', num(balance, 'commonStock'), num(balance, 'capitalSurplus'));
+  set('revenue', n('TotalRevenue'));
+  set('cogs', n('CostOfRevenue'));
+  set('cash', n('CashAndCashEquivalents') ?? n('CashCashEquivalentsAndShortTermInvestments'), n('OtherShortTermInvestments'));
+  set('accountsReceivable', n('AccountsReceivable') ?? n('Receivables'));
+  set('inventories', n('Inventory'));
+  set('otherCurrentAssets', n('OtherCurrentAssets'));
+  set('ppe', n('NetPPE'));
+  set('otherNonCurrentAssets', n('OtherNonCurrentAssets'), n('Goodwill'), n('OtherIntangibleAssets'));
+  set('accountsPayable', n('AccountsPayable') ?? n('Payables'));
+  set('otherCurrentLiabilities', n('OtherCurrentLiabilities'));
+  set('deferredRevenue', n('CurrentDeferredRevenue'));
+  set('commercialPaper', n('CommercialPaper'));
+  set('longTermDebt', n('LongTermDebt'), n('CurrentDebt'));
+  set('otherNonCurrentLiabilities', n('OtherNonCurrentLiabilities'));
+  set('retainedEarnings', n('RetainedEarnings'));
+  set('otherComprehensiveIncome', n('GainsLossesNotAffectingRetainedEarnings'));
+  set('commonStock', n('CommonStock') ?? n('CommonStockEquity'), n('AdditionalPaidInCapital'));
 
   return { values, found, missing };
 }

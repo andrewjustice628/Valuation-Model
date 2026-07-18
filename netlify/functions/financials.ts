@@ -4,48 +4,74 @@
  * in src/lib/financials.ts). Key stays server-side. Values are raw dollars.
  */
 import { mapReportedFinancials, type ReportedFinancials } from '../../src/lib/financials';
-import { mapYahooFinancials, type YahooStatement } from '../../src/lib/yahooFinancials';
+import { mapYahooTimeseries, YAHOO_TS_FIELDS } from '../../src/lib/yahooFinancials';
 
 export const config = { path: '/api/financials' };
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36';
 
-/** International fallback: Yahoo Finance quoteSummary (needs a cookie + crumb). */
+/** Best-effort Yahoo session cookie (timeseries usually works without a crumb). */
+async function yahooCookie(): Promise<string> {
+  try {
+    const r = await fetch('https://fc.yahoo.com/', { headers: { 'User-Agent': UA } });
+    const sc =
+      typeof r.headers.getSetCookie === 'function'
+        ? r.headers.getSetCookie()
+        : [r.headers.get('set-cookie')].filter((c): c is string => !!c);
+    return sc.map((c) => c.split(';')[0]).join('; ');
+  } catch {
+    return '';
+  }
+}
+
+interface TsPoint {
+  asOfDate?: string;
+  reportedValue?: { raw?: number };
+  currencyCode?: string;
+}
+
+/**
+ * International fallback: Yahoo fundamentals-timeseries. Flattens each series
+ * to its latest annual value into a { baseFieldName: number } record.
+ */
 async function fetchYahooFinancials(symbol: string) {
-  // 1. Obtain a session cookie.
-  const cookieRes = await fetch('https://fc.yahoo.com/', { headers: { 'User-Agent': UA } });
-  const setCookies =
-    typeof cookieRes.headers.getSetCookie === 'function'
-      ? cookieRes.headers.getSetCookie()
-      : [cookieRes.headers.get('set-cookie')].filter((c): c is string => !!c);
-  const cookie = setCookies.map((c) => c.split(';')[0]).join('; ');
-  if (!cookie) throw new Error('no cookie');
-
-  // 2. Exchange it for a crumb.
-  const crumbRes = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-    headers: { 'User-Agent': UA, cookie },
-  });
-  const crumb = (await crumbRes.text()).trim();
-  if (!crumb || crumb.includes('<') || crumb.length > 32) throw new Error('no crumb');
-
-  // 3. Pull the statements.
+  const cookie = await yahooCookie();
+  const types = YAHOO_TS_FIELDS.map((f) => `annual${f}`).join(',');
+  const now = Math.floor(Date.now() / 1000);
+  const period1 = now - 6 * 365 * 24 * 3600;
   const url =
-    `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}` +
-    `?modules=incomeStatementHistory,balanceSheetHistory,price&crumb=${encodeURIComponent(crumb)}`;
-  const res = await fetch(url, { headers: { 'User-Agent': UA, cookie } });
-  if (!res.ok) throw new Error(`quoteSummary ${res.status}`);
+    `https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(symbol)}` +
+    `?symbol=${encodeURIComponent(symbol)}&type=${types}&period1=${period1}&period2=${now}&merge=false`;
+
+  const res = await fetch(url, { headers: { 'User-Agent': UA, ...(cookie ? { cookie } : {}) } });
+  if (!res.ok) throw new Error(`timeseries ${res.status}`);
   const data = (await res.json()) as {
-    quoteSummary?: { result?: Array<Record<string, any>> };
+    timeseries?: { result?: Array<Record<string, unknown> & { meta?: { type?: string[] } }> };
   };
-  const result = data.quoteSummary?.result?.[0];
-  if (!result) throw new Error('no result');
-  const income = (result.incomeStatementHistory?.incomeStatementHistory?.[0] ?? {}) as YahooStatement;
-  const balance = (result.balanceSheetHistory?.balanceSheetStatements?.[0] ?? {}) as YahooStatement;
-  const endDate: string | null =
-    balance?.endDate?.fmt ?? income?.endDate?.fmt ?? null;
-  const currency: string | null = result.price?.financialCurrency ?? result.price?.currency ?? null;
-  return { income, balance, endDate, currency };
+  const series = data.timeseries?.result ?? [];
+
+  const values: Record<string, number> = {};
+  let endDate: string | null = null;
+  let currency: string | null = null;
+
+  for (const s of series) {
+    const type = s.meta?.type?.[0];
+    if (!type) continue;
+    const arr = s[type];
+    if (!Array.isArray(arr)) continue;
+    const points = (arr as TsPoint[]).filter(
+      (p) => p && p.reportedValue && typeof p.reportedValue.raw === 'number',
+    );
+    if (points.length === 0) continue;
+    points.sort((a, b) => (b.asOfDate ?? '').localeCompare(a.asOfDate ?? ''));
+    const p = points[0];
+    values[type.replace(/^annual/, '')] = p.reportedValue!.raw as number;
+    if (!endDate || (p.asOfDate ?? '') > endDate) endDate = p.asOfDate ?? endDate;
+    if (!currency && p.currencyCode) currency = p.currencyCode;
+  }
+
+  return { values, endDate, currency };
 }
 
 interface ReportRow {
@@ -96,7 +122,7 @@ export default async (req: Request): Promise<Response> => {
     // No SEC filing — try the international Yahoo Finance fallback.
     try {
       const y = await fetchYahooFinancials(symbol);
-      const mapped = mapYahooFinancials(y.income, y.balance);
+      const mapped = mapYahooTimeseries(y.values);
       if (mapped.found.length > 0) {
         return json({
           symbol,
