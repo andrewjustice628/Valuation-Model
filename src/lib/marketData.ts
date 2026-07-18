@@ -28,9 +28,11 @@ export interface MarketDataProvider {
 
 export interface MappedFinancialsResponse {
   symbol: string;
+  source: 'sec' | 'yahoo' | null;
   fiscalYear: number | null;
   form: string | null;
   endDate: string | null;
+  currency: string | null;
   values: Record<string, number>;
   found: string[];
   missing: string[];
@@ -67,9 +69,11 @@ export const netlifyQuoteProvider: MarketDataProvider = {
     if (!res.ok) throw new Error(data.error ?? `Financials request failed (${res.status}).`);
     return {
       symbol: data.symbol ?? symbol,
+      source: data.source ?? null,
       fiscalYear: data.fiscalYear ?? null,
       form: data.form ?? null,
       endDate: data.endDate ?? null,
+      currency: data.currency ?? null,
       values: data.values ?? {},
       found: data.found ?? [],
       missing: data.missing ?? [],

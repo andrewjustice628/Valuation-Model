@@ -219,14 +219,17 @@ export const useModel = create<ModelState>((set, get) => ({
         const missing = r.missing.length
           ? ` Enter manually: ${r.missing.join(', ')}.`
           : '';
+        const src = r.source === 'yahoo' ? 'Yahoo Finance' : r.form ?? 'filing';
+        const cur = r.currency ?? 'actual';
+        const verify = r.source === 'yahoo' ? ' Source is unofficial — verify against the report.' : '';
         return {
           base,
           bridge,
-          company: { ...s.company, unit: 'Actual ($)' },
+          company: { ...s.company, unit: cur === 'USD' ? 'Actual ($)' : `Actual (${cur})` },
           financialsStatus: 'ok',
           financialsMessage:
-            `Filled ${r.found.length} fields from ${r.form ?? 'filing'} (FY ${r.fiscalYear ?? '?'}). ` +
-            `Values are in actual dollars — enter forecast $ inputs in the same unit.${missing}`,
+            `Filled ${r.found.length} fields from ${src} (FY ${r.fiscalYear ?? '?'}). ` +
+            `Values are in ${cur} units — enter forecast inputs to match.${verify}${missing}`,
         };
       });
     } catch (e) {
