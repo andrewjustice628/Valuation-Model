@@ -207,8 +207,14 @@ export const useModel = create<ModelState>((set, get) => ({
       const r = await activeProvider.fetchFinancials(ticker);
       set((s) => {
         const base = { ...s.base };
+        // Found fields → the actual value; fields the source couldn't provide →
+        // reset to 0 so a prior company's data never lingers (the message lists
+        // these for manual entry).
         for (const [k, v] of Object.entries(r.values)) {
           if (k in base && typeof v === 'number') (base as Record<string, number>)[k] = v;
+        }
+        for (const k of r.missing) {
+          if (k in base) (base as Record<string, number>)[k] = 0;
         }
         if (r.fiscalYear) base.fiscalYear = r.fiscalYear;
         // Prefill the net-debt bridge from the same actuals for a sensible DCF.
@@ -217,19 +223,20 @@ export const useModel = create<ModelState>((set, get) => ({
           debt: base.longTermDebt + base.commercialPaper,
           cashAndEquivalents: base.cash,
         };
-        // Seed every forecast year from the company's actuals (a starting point).
-        // Rates/ratios are held flat; dollar drivers ramp at the geometric
-        // revenue-growth rate g (forecast year k value = actual × (1 + g)^k).
+        // Rebuild every forecast year from clean defaults (so a prior company's
+        // seeded assumptions don't linger), then apply this company's seed:
+        // rates/ratios flat; dollar drivers ramp at the geometric revenue-growth
+        // rate g (forecast year k value = actual × (1 + g)^k).
         const seed = r.seed ?? {};
         const seededKeys = Object.keys(seed).filter((k) => typeof seed[k] === 'number' && Number.isFinite(seed[k]));
         const g = typeof seed.revenueGrowth === 'number' && Number.isFinite(seed.revenueGrowth) ? seed.revenueGrowth : 0;
         const ramp = new Set<string>(RAMP_SEED_FIELDS);
         const assumptions = s.assumptions.map((a, i) => {
-          const na = { ...a };
+          const na = defaultAssumption(a.fiscalYear, i);
           for (const k of seededKeys) {
             if (!(k in na)) continue;
             const value = ramp.has(k) ? seed[k] * Math.pow(1 + g, i + 1) : seed[k];
-            (na as Record<string, number>)[k] = value;
+            (na as unknown as Record<string, number>)[k] = value;
           }
           return na;
         });
