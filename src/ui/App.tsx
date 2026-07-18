@@ -5,6 +5,9 @@ import { ASSUMPTION_GROUPS, BASE_FIELDS, BRIDGE_FIELDS, WACC_FIELDS } from './ca
 
 const MULTIPLES = ['EV/EBITDA', 'P/E', 'P/S', 'P/B', 'EV/Sales'];
 
+const fmtNum = (x: number | undefined) =>
+  typeof x === 'number' && Number.isFinite(x) ? x.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
+
 function CompanyHeader() {
   const company = useModel((s) => s.company);
   const setCompany = useModel((s) => s.setCompany);
@@ -55,26 +58,44 @@ function CompanyHeader() {
 function BaseSection() {
   const base = useModel((s) => s.base);
   const setBase = useModel((s) => s.setBase);
+  const historicalBase = useModel((s) => s.historicalBase);
   const fetchFinancials = useModel((s) => s.fetchFinancials);
   const status = useModel((s) => s.financialsStatus);
   const message = useModel((s) => s.financialsMessage);
+  // The two years before the latest actual — shown for reference (read-only).
+  const priors = historicalBase.filter((h) => h.fiscalYear < base.fiscalYear).slice(-2);
   return (
     <details open>
-      <summary>Base year (last actuals) — {base.fiscalYear}</summary>
+      <summary>Base year &amp; prior actuals — {base.fiscalYear}</summary>
       <div className="row" style={{ marginBottom: 8 }}>
         <button className="fetch" onClick={() => fetchFinancials()} disabled={status === 'loading'}>
           {status === 'loading' ? 'Fetching filing…' : 'Auto-fill from latest filing'}
         </button>
         {message && <span className={status === 'error' ? 'err' : 'ok'}>{message}</span>}
       </div>
-      <div className="grid">
-        {BASE_FIELDS.map((f) => (
-          <div className="cell" key={f.id}>
-            <FieldLabel fieldId={`base.${f.id}`} label={f.label} aka={f.aka} />
-            <NumberInput value={base[f.id]} onCommit={(n) => setBase(f.id, n)} />
-          </div>
-        ))}
-      </div>
+      <table className="assum base-table">
+        <thead>
+          <tr>
+            <th className="rowhead">Line item</th>
+            {priors.map((p) => <th key={p.fiscalYear} className="hist">{p.fiscalYear}A</th>)}
+            <th className="fdiv">{base.fiscalYear} (edit)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {BASE_FIELDS.map((f) => (
+            <tr key={f.id}>
+              <td className="rowhead"><FieldLabel fieldId={`base.${f.id}`} label={f.label} aka={f.aka} /></td>
+              {priors.map((p) => <td key={p.fiscalYear} className="hist">{fmtNum(p[f.id])}</td>)}
+              <td className="fdiv"><NumberInput value={base[f.id]} onCommit={(n) => setBase(f.id, n)} width={130} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="note">
+        {priors.length > 0
+          ? 'Prior-year columns (A) are read-only reference actuals; only the latest year drives the forecast.'
+          : 'Auto-fill a ticker to show the prior years’ actuals beside the base year.'}
+      </p>
     </details>
   );
 }

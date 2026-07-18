@@ -3,8 +3,8 @@
  * them to our canonical base-year fields (mapping is shared, pure, tested code
  * in src/lib/financials.ts). Key stays server-side. Values are raw dollars.
  */
-import { mapReportedFinancials, deriveReportedSeed, deriveReportedHistoricals, type ReportedFinancials } from '../../src/lib/financials';
-import { mapYahooTimeseries, deriveYahooSeed, deriveYahooHistoricals, YAHOO_TS_FIELDS } from '../../src/lib/yahooFinancials';
+import { mapReportedFinancials, deriveReportedSeed, deriveReportedHistoricals, deriveReportedBaseHistory, type ReportedFinancials } from '../../src/lib/financials';
+import { mapYahooTimeseries, deriveYahooSeed, deriveYahooHistoricals, deriveYahooBaseHistory, YAHOO_TS_FIELDS } from '../../src/lib/yahooFinancials';
 import { deriveBalanceSheetSeed } from '../../src/lib/seed';
 
 export const config = { path: '/api/financials' };
@@ -126,6 +126,7 @@ export default async (req: Request): Promise<Response> => {
         currency: 'USD',
         seed,
         historicals: deriveReportedHistoricals(reports),
+        historicalBase: deriveReportedBaseHistory(reports),
         ...mapped,
       });
     }
@@ -145,6 +146,7 @@ export default async (req: Request): Promise<Response> => {
           currency: y.currency,
           seed,
           historicals: deriveYahooHistoricals(y.byYear),
+          historicalBase: deriveYahooBaseHistory(y.byYear),
           ...mapped,
         });
       }

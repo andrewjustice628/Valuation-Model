@@ -216,6 +216,19 @@ export function deriveReportedSeed(reports: ReportLike[]): ForecastSeed {
   return seed;
 }
 
+/** Full canonical base-year fields per year (up to last 5) for the input grid. */
+export function deriveReportedBaseHistory(reports: ReportLike[]): Array<Record<string, number>> {
+  return reports
+    .filter((r) => r.report)
+    .map((r) => ({
+      fiscalYear: Number((r.endDate ?? '').slice(0, 4)) || r.year || 0,
+      ...mapReportedFinancials(r.report!).values,
+    }))
+    .filter((x) => x.fiscalYear)
+    .sort((a, b) => a.fiscalYear - b.fiscalYear)
+    .slice(-5);
+}
+
 /** Historical income statements (up to last 5 years) from as-reported filings. */
 export function deriveReportedHistoricals(reports: ReportLike[]): HistoricalYear[] {
   return reports

@@ -38,6 +38,7 @@ export interface MappedFinancialsResponse {
   values: Record<string, number>;
   seed: Record<string, number>;
   historicals: HistoricalYear[];
+  historicalBase: Array<Record<string, number>>;
   found: string[];
   missing: string[];
 }
@@ -81,6 +82,7 @@ export const netlifyQuoteProvider: MarketDataProvider = {
       values: data.values ?? {},
       seed: data.seed ?? {},
       historicals: data.historicals ?? [],
+      historicalBase: data.historicalBase ?? [],
       found: data.found ?? [],
       missing: data.missing ?? [],
     };

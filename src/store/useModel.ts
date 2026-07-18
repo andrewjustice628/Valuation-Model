@@ -104,6 +104,7 @@ export interface ModelState {
   comps: CompsConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
+  historicalBase: Array<Record<string, number>>;
   quoteStatus: FetchStatus;
   quoteError: string | null;
   financialsStatus: FetchStatus;
@@ -144,6 +145,7 @@ export const useModel = create<ModelState>((set, get) => ({
   },
   labels: {},
   historicals: [],
+  historicalBase: [],
   quoteStatus: 'idle',
   quoteError: null,
   financialsStatus: 'idle',
@@ -254,6 +256,7 @@ export const useModel = create<ModelState>((set, get) => ({
           base,
           assumptions,
           historicals: r.historicals ?? [],
+          historicalBase: r.historicalBase ?? [],
           company: { ...s.company, unit: cur === 'USD' ? 'Actual ($)' : `Actual (${cur})` },
           financialsStatus: 'ok',
           financialsMessage:

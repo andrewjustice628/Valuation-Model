@@ -118,6 +118,16 @@ export function deriveYahooSeed(
   return seed;
 }
 
+/** Full canonical base-year fields per year (up to last 5) for the input grid. */
+export function deriveYahooBaseHistory(byYear: Record<number, Record<string, number>>): Array<Record<string, number>> {
+  return Object.keys(byYear)
+    .map(Number)
+    .filter((y) => Number.isFinite(y))
+    .sort((a, b) => a - b)
+    .slice(-5)
+    .map((y) => ({ fiscalYear: y, ...mapYahooTimeseries(byYear[y]).values }));
+}
+
 /** Historical income statements (up to last 5 years) from Yahoo per-year data. */
 export function deriveYahooHistoricals(byYear: Record<number, Record<string, number>>): HistoricalYear[] {
   return Object.keys(byYear)
