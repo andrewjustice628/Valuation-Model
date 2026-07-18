@@ -56,4 +56,11 @@ describe('mapYahooTimeseries', () => {
     const m = mapYahooTimeseries({ CashCashEquivalentsAndShortTermInvestments: 500 });
     expect(m.values.cash).toBe(500);
   });
+  it('falls back to capital-lease debt variants (IFRS filers)', () => {
+    const m = mapYahooTimeseries({
+      LongTermDebtAndCapitalLeaseObligation: 20000,
+      CurrentDebtAndCapitalLeaseObligation: 3000,
+    });
+    expect(m.values.longTermDebt).toBe(23000);
+  });
 });

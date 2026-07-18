@@ -16,8 +16,11 @@ export const YAHOO_TS_FIELDS = [
   'CashAndCashEquivalents', 'OtherShortTermInvestments', 'CashCashEquivalentsAndShortTermInvestments',
   'AccountsReceivable', 'Receivables', 'Inventory', 'OtherCurrentAssets',
   'NetPPE', 'Goodwill', 'OtherIntangibleAssets', 'OtherNonCurrentAssets',
-  'AccountsPayable', 'Payables', 'OtherCurrentLiabilities', 'CurrentDeferredRevenue',
-  'CommercialPaper', 'LongTermDebt', 'CurrentDebt', 'OtherNonCurrentLiabilities',
+  'AccountsPayable', 'Payables', 'OtherCurrentLiabilities', 'OtherCurrentLiabilitiesTotal',
+  'CurrentDeferredRevenue', 'CurrentDeferredLiabilities',
+  'CommercialPaper', 'LongTermDebt', 'LongTermDebtAndCapitalLeaseObligation',
+  'CurrentDebt', 'CurrentDebtAndCapitalLeaseObligation',
+  'OtherNonCurrentLiabilities', 'TotalNonCurrentLiabilitiesNetMinorityInterest',
   'RetainedEarnings', 'CommonStock', 'AdditionalPaidInCapital', 'CommonStockEquity',
   'GainsLossesNotAffectingRetainedEarnings',
 ] as const;
@@ -50,10 +53,14 @@ export function mapYahooTimeseries(v: Record<string, number>): MappedFinancials 
   set('ppe', n('NetPPE'));
   set('otherNonCurrentAssets', n('OtherNonCurrentAssets'), n('Goodwill'), n('OtherIntangibleAssets'));
   set('accountsPayable', n('AccountsPayable') ?? n('Payables'));
-  set('otherCurrentLiabilities', n('OtherCurrentLiabilities'));
-  set('deferredRevenue', n('CurrentDeferredRevenue'));
+  set('otherCurrentLiabilities', n('OtherCurrentLiabilities') ?? n('OtherCurrentLiabilitiesTotal'));
+  set('deferredRevenue', n('CurrentDeferredRevenue') ?? n('CurrentDeferredLiabilities'));
   set('commercialPaper', n('CommercialPaper'));
-  set('longTermDebt', n('LongTermDebt'), n('CurrentDebt'));
+  set(
+    'longTermDebt',
+    n('LongTermDebt') ?? n('LongTermDebtAndCapitalLeaseObligation'),
+    n('CurrentDebt') ?? n('CurrentDebtAndCapitalLeaseObligation'),
+  );
   set('otherNonCurrentLiabilities', n('OtherNonCurrentLiabilities'));
   set('retainedEarnings', n('RetainedEarnings'));
   set('otherComprehensiveIncome', n('GainsLossesNotAffectingRetainedEarnings'));
