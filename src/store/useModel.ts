@@ -5,7 +5,7 @@
  */
 import { create } from 'zustand';
 import { activeProvider } from '../lib/marketData';
-import { RAMP_SEED_FIELDS, revenueGrowthFromHistory } from '../lib/seed';
+import { RAMP_SEED_FIELDS, revenueGrowthFromHistory, effectiveTaxRate } from '../lib/seed';
 import type { HistoricalYear } from '../lib/historicals';
 import type { BaseYear, ForecastAssumptions } from '../engine/statements';
 import type { NetDebtBridge, WaccAssumptions } from '../engine/types';
@@ -77,6 +77,7 @@ const defaultAssumption = (fiscalYear: number, i: number): ForecastAssumptions =
 
 const defaultBase: BaseYear = {
   fiscalYear: LATEST_ACTUAL_YEAR, revenue: 1000, cogs: 600,
+  rd: 50, sga: 150, da: 50, interestIncome: 5, interestExpense: 10, otherExpenses: 15, taxes: 27,
   cash: 100, accountsReceivable: 150, inventories: 80, otherCurrentAssets: 20,
   ppe: 500, otherNonCurrentAssets: 50,
   accountsPayable: 90, otherCurrentLiabilities: 40, deferredRevenue: 30,
@@ -109,6 +110,13 @@ function growthFromHistory(base: BaseYear, historicalBase: Array<Record<string, 
  */
 const RATIO_FROM_BASE: Record<string, (b: BaseYear) => number | undefined> = {
   grossMargin: (b) => (b.revenue > 0 ? (b.revenue - b.cogs) / b.revenue : undefined),
+  rdPctSales: (b) => (b.revenue > 0 ? b.rd / b.revenue : undefined),
+  sgaPctSales: (b) => (b.revenue > 0 ? b.sga / b.revenue : undefined),
+  taxRate: (b) => {
+    const ebit = b.revenue - b.cogs - b.rd - b.sga - b.da;
+    const pretax = ebit + b.interestIncome - b.interestExpense - b.otherExpenses;
+    return effectiveTaxRate(b.taxes, pretax);
+  },
   arPctRevenue: (b) => (b.revenue > 0 ? b.accountsReceivable / b.revenue : undefined),
   invPctCogs: (b) => (b.cogs > 0 ? b.inventories / b.cogs : undefined),
   otherCurrentAssetsPctRevenue: (b) => (b.revenue > 0 ? b.otherCurrentAssets / b.revenue : undefined),

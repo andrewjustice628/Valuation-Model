@@ -55,6 +55,13 @@ export interface MappedFinancials {
 const MAP: Record<MappableField, string[][]> = {
   revenue: [['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues', 'RevenueFromContractWithCustomerIncludingAssessedTax', 'SalesRevenueNet', 'Revenue']],
   cogs: [['CostOfGoodsAndServicesSold', 'CostOfRevenue', 'CostOfGoodsSold', 'CostOfSales']],
+  rd: [['ResearchAndDevelopmentExpense']],
+  sga: [['SellingGeneralAndAdministrativeExpense', 'GeneralAndAdministrativeExpense']],
+  da: [['DepreciationDepletionAndAmortization', 'DepreciationAmortizationAndAccretionNet', 'DepreciationAndAmortization']],
+  interestIncome: [['InvestmentIncomeInterest', 'InterestAndDividendIncomeOperating']],
+  interestExpense: [['InterestExpense', 'InterestExpenseDebt']],
+  otherExpenses: [['OtherNonoperatingIncomeExpense']],
+  taxes: [['IncomeTaxExpenseBenefit']],
   cash: [
     ['CashAndCashEquivalentsAtCarryingValue', 'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'],
     ['MarketableSecuritiesCurrent', 'ShortTermInvestments', 'AvailableForSaleSecuritiesCurrent'],

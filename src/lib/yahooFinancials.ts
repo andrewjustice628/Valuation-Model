@@ -56,6 +56,13 @@ export function mapYahooTimeseries(v: Record<string, number>): MappedFinancials 
 
   set('revenue', n('TotalRevenue'));
   set('cogs', n('CostOfRevenue'));
+  set('rd', n('ResearchAndDevelopment'));
+  set('sga', n('SellingGeneralAndAdministration'));
+  set('da', n('ReconciledDepreciation'));
+  set('interestIncome', n('InterestIncome') ?? n('InterestIncomeNonOperating'));
+  set('interestExpense', n('InterestExpense'));
+  set('taxes', n('TaxProvision'));
+  set('otherExpenses'); // not cleanly exposed by Yahoo → manual
   set('cash', n('CashAndCashEquivalents') ?? n('CashCashEquivalentsAndShortTermInvestments'), n('OtherShortTermInvestments'));
   set('accountsReceivable', n('AccountsReceivable') ?? n('Receivables'));
   set('inventories', n('Inventory'));

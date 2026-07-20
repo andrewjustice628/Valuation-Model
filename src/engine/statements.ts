@@ -19,6 +19,14 @@ export interface BaseYear {
   fiscalYear: number;
   revenue: number;
   cogs: number;
+  // Income statement (drive the R&D%, SG&A%, tax-rate assumptions)
+  rd: number;
+  sga: number;
+  da: number;
+  interestIncome: number;
+  interestExpense: number;
+  otherExpenses: number;
+  taxes: number;
   // Balance sheet (opening balances for the first forecast year)
   cash: number;
   accountsReceivable: number;

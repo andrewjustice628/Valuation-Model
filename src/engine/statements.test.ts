@@ -4,6 +4,7 @@ import { runDcf } from './dcf';
 
 const base: BaseYear = {
   fiscalYear: 2025, revenue: 1000, cogs: 600,
+  rd: 0, sga: 0, da: 0, interestIncome: 0, interestExpense: 0, otherExpenses: 0, taxes: 0,
   cash: 100, accountsReceivable: 150, inventories: 80, otherCurrentAssets: 20,
   ppe: 500, otherNonCurrentAssets: 50,
   accountsPayable: 90, otherCurrentLiabilities: 40, deferredRevenue: 30,

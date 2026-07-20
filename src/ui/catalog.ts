@@ -17,6 +17,13 @@ export interface FieldDef<K extends string = string> {
 export const BASE_FIELDS: FieldDef<keyof BaseYear>[] = [
   { id: 'revenue', label: 'Revenue', aka: 'Net sales, Total revenue' },
   { id: 'cogs', label: 'COGS', aka: 'Cost of sales, Cost of revenue' },
+  { id: 'rd', label: 'R&D Expense', aka: 'Research & development' },
+  { id: 'sga', label: 'SG&A Expense', aka: 'Selling, general & admin' },
+  { id: 'da', label: 'Depreciation & Amortization' },
+  { id: 'interestIncome', label: 'Interest Income' },
+  { id: 'interestExpense', label: 'Interest Expense' },
+  { id: 'otherExpenses', label: 'Other Expenses' },
+  { id: 'taxes', label: 'Income Taxes', aka: 'Income tax expense' },
   { id: 'cash', label: 'Cash & Equivalents', aka: 'Incl. marketable securities' },
   { id: 'accountsReceivable', label: 'Accounts Receivable', aka: 'Trade receivables' },
   { id: 'inventories', label: 'Inventories', aka: 'Inventory' },
