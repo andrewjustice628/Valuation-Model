@@ -289,6 +289,40 @@ function WaccSection() {
   );
 }
 
+function PrecedentSection() {
+  const precedent = useModel((s) => s.precedent);
+  const setPrecedent = useModel((s) => s.setPrecedent);
+  const setDeal = (i: number, patch: Partial<{ label: string; multiple: number | null }>) =>
+    setPrecedent({ deals: precedent.deals.map((d, k) => (k === i ? { ...d, ...patch } : d)) });
+  return (
+    <details>
+      <summary>Precedent transactions (M&amp;A)</summary>
+      <div className="row">
+        <label className="stack">
+          <span>Chosen multiple</span>
+          <select value={precedent.multipleName} onChange={(e) => setPrecedent({ multipleName: e.target.value })}>
+            {MULTIPLES.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
+      </div>
+      <table className="peers">
+        <thead><tr><th>Deal / target</th><th>{precedent.multipleName}</th><th></th></tr></thead>
+        <tbody>
+          {precedent.deals.map((d, i) => (
+            <tr key={i}>
+              <td><input value={d.label} placeholder="e.g. Acquirer / Target (2024)" onChange={(e) => setDeal(i, { label: e.target.value })} /></td>
+              <td><NumberInput value={d.multiple ?? 0} onCommit={(n) => setDeal(i, { multiple: n })} width={90} /></td>
+              <td><button className="mini" onClick={() => setPrecedent({ deals: precedent.deals.filter((_, k) => k !== i) })}>✕</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className="add" onClick={() => setPrecedent({ deals: [...precedent.deals, { label: '', multiple: null }] })}>+ Add deal</button>
+      <p className="note">M&amp;A deal multiples are entered manually (they include a control premium, so they typically run above trading comps). Applied to the same company metric as comps.</p>
+    </details>
+  );
+}
+
 function FinancialsSection() {
   const sector = useModel((s) => s.company.sector);
   const financials = useModel((s) => s.financials);
@@ -421,6 +455,7 @@ export function App() {
           <WaccSection />
           <FinancialsSection />
           <CompsSection />
+          <PrecedentSection />
           <BridgeSection />
         </div>
         <div className="output">

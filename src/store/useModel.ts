@@ -24,9 +24,9 @@ export interface CompanyInfo {
 
 /** Which valuation methods fit each sector (recommended, not exclusive). */
 export const SECTOR_METHODS: Record<Sector, string[]> = {
-  corporate: ['dcf', 'comps'],
-  financial: ['ddm', 'pb', 'comps'],
-  reit: ['ddm', 'comps'],
+  corporate: ['dcf', 'comps', 'precedent'],
+  financial: ['ddm', 'pb', 'comps', 'precedent'],
+  reit: ['ddm', 'comps', 'precedent'],
   utility: ['ddm', 'dcf'],
 };
 
@@ -49,6 +49,17 @@ export interface CompsConfig {
   peers: Peer[];
   /** Override the company metric the multiple is applied to (else terminal EBITDA). */
   companyMetricOverride: number | null;
+}
+
+export interface PrecedentDeal {
+  label: string;
+  multiple: number | null;
+}
+
+/** Precedent M&A transaction multiples (manual — include control premium). */
+export interface PrecedentConfig {
+  multipleName: string;
+  deals: PrecedentDeal[];
 }
 
 export interface DcfConfig {
@@ -204,6 +215,7 @@ export interface ModelSnapshot {
   bridge: NetDebtBridge;
   dcf: DcfConfig;
   comps: CompsConfig;
+  precedent: PrecedentConfig;
   financials: FinancialsConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
@@ -224,6 +236,10 @@ function initialModel(): ModelSnapshot {
       peers: [{ ticker: '', multiple: null }, { ticker: '', multiple: null }, { ticker: '', multiple: null }],
       companyMetricOverride: null,
     },
+    precedent: {
+      multipleName: 'EV/EBITDA',
+      deals: [{ label: '', multiple: null }, { label: '', multiple: null }, { label: '', multiple: null }],
+    },
     financials: { bookValuePerShare: 50, roe: 0.12, payoutRatio: 0.4, highGrowthYears: 10, terminalGrowth: 0.025 },
     labels: {},
     historicals: [],
@@ -242,6 +258,7 @@ export interface ModelState {
   bridge: NetDebtBridge;
   dcf: DcfConfig;
   comps: CompsConfig;
+  precedent: PrecedentConfig;
   financials: FinancialsConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
@@ -269,6 +286,7 @@ export interface ModelState {
   setBridge: (field: keyof NetDebtBridge, value: number) => void;
   setDcf: (patch: Partial<DcfConfig>) => void;
   setComps: (patch: Partial<CompsConfig>) => void;
+  setPrecedent: (patch: Partial<PrecedentConfig>) => void;
   setFinancials: (patch: Partial<FinancialsConfig>) => void;
   setPeer: (index: number, patch: Partial<Peer>) => void;
   addPeer: () => void;
@@ -291,8 +309,8 @@ export const useModel = create<ModelState>((set, get) => ({
     const s = get();
     return {
       company: s.company, base: s.base, assumptions: s.assumptions, wacc: s.wacc, bridge: s.bridge,
-      dcf: s.dcf, comps: s.comps, financials: s.financials, labels: s.labels, historicals: s.historicals,
-      historicalBase: s.historicalBase, manualOverrides: s.manualOverrides,
+      dcf: s.dcf, comps: s.comps, precedent: s.precedent, financials: s.financials, labels: s.labels,
+      historicals: s.historicals, historicalBase: s.historicalBase, manualOverrides: s.manualOverrides,
     };
   },
   saveModel: (name) =>
@@ -348,6 +366,7 @@ export const useModel = create<ModelState>((set, get) => ({
   setBridge: (field, value) => set((s) => ({ bridge: { ...s.bridge, [field]: value } })),
   setDcf: (patch) => set((s) => ({ dcf: { ...s.dcf, ...patch } })),
   setComps: (patch) => set((s) => ({ comps: { ...s.comps, ...patch } })),
+  setPrecedent: (patch) => set((s) => ({ precedent: { ...s.precedent, ...patch } })),
   setFinancials: (patch) => set((s) => ({ financials: { ...s.financials, ...patch } })),
   setPeer: (index, patch) =>
     set((s) => ({ comps: { ...s.comps, peers: s.comps.peers.map((p, i) => (i === index ? { ...p, ...patch } : p)) } })),
@@ -390,6 +409,8 @@ export const useModel = create<ModelState>((set, get) => ({
           sharesOutstanding: q.sharesOutstanding ?? s.company.sharesOutstanding,
           sector: q.industry ? sectorFromIndustry(q.industry) : s.company.sector,
         },
+        // Live beta feeds the CAPM cost of equity; other WACC inputs stay manual.
+        wacc: typeof q.beta === 'number' && Number.isFinite(q.beta) ? { ...s.wacc, beta: q.beta } : s.wacc,
       }));
     } catch (e) {
       set({ quoteStatus: 'error', quoteError: e instanceof Error ? e.message : 'Fetch failed.' });

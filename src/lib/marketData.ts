@@ -15,6 +15,7 @@ export interface Quote {
   sharesOutstanding: number | null;
   currency: string | null;
   industry: string | null;
+  beta: number | null;
 }
 
 export interface MarketDataProvider {
@@ -60,6 +61,7 @@ export const netlifyQuoteProvider: MarketDataProvider = {
       sharesOutstanding: data.sharesOutstanding ?? null,
       currency: data.currency ?? null,
       industry: data.industry ?? null,
+      beta: data.beta ?? null,
     };
   },
   async fetchMultiple(symbol: string, multipleName: string): Promise<number | null> {

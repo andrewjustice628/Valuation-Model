@@ -22,6 +22,7 @@ export function useComputed() {
   const bridge = useModel((s) => s.bridge);
   const dcfCfg = useModel((s) => s.dcf);
   const comps = useModel((s) => s.comps);
+  const precedent = useModel((s) => s.precedent);
   const shares = useModel((s) => s.company.sharesOutstanding);
   const sharePrice = useModel((s) => s.company.sharePrice);
   const sector = useModel((s) => s.company.sector);
@@ -58,6 +59,16 @@ export function useComputed() {
       multipleName: comps.multipleName,
       companyMetric,
       peerMultiples,
+      netDebt: dcf.netDebt,
+      sharesOutstanding: shares,
+    });
+    const precedentMultiples = precedent.deals
+      .map((d) => d.multiple)
+      .filter((m): m is number => typeof m === 'number' && Number.isFinite(m));
+    const precedentResult = runComps({
+      multipleName: precedent.multipleName,
+      companyMetric,
+      peerMultiples: precedentMultiples,
       netDebt: dcf.netDebt,
       sharesOutstanding: shares,
     });
@@ -106,6 +117,7 @@ export function useComputed() {
     const methods = [
       { id: 'dcf', label: 'Discounted Cash Flow', perShare: dcf.equityValuePerShare, note: 'Unlevered FCF → enterprise value', recommended: rec.has('dcf') },
       { id: 'comps', label: 'Comparable Companies', perShare: compsResult.equityValuePerShare, note: comps.multipleName, recommended: rec.has('comps') },
+      { id: 'precedent', label: 'Precedent Transactions', perShare: precedentResult.equityValuePerShare, note: `${precedent.multipleName} · ${precedentMultiples.length} deals`, recommended: rec.has('precedent') },
       { id: 'ddm', label: 'Dividend Discount', perShare: ddmPerShare, note: ddmNote, recommended: rec.has('ddm') },
       { id: 'fcfe', label: 'FCFE (levered)', perShare: fcfe.perShare, note: 'Equity cash flow @ cost of equity', recommended: rec.has('fcfe') },
       { id: 'pb', label: 'Justified P/B (steady-state)', perShare: pbPerShare, note: `Implied P/B ${Number.isFinite(fin.justifiedPb) ? `${fin.justifiedPb.toFixed(2)}×` : '—'}`, recommended: rec.has('pb') },
@@ -116,10 +128,14 @@ export function useComputed() {
     const ranges: { label: string; low: number; base: number; high: number }[] = [
       { label: 'DCF (WACC/growth range)', low: Math.min(...dcfVals), base: dcf.equityValuePerShare, high: Math.max(...dcfVals) },
     ];
+    const perShareFromMultiple = (m: number) => (shares > 0 ? (companyMetric * m - dcf.netDebt) / shares : NaN);
     if (peerMultiples.length > 0) {
-      const psFromMultiple = (m: number) => (shares > 0 ? (companyMetric * m - dcf.netDebt) / shares : NaN);
-      const compPs = peerMultiples.map(psFromMultiple).filter((v) => Number.isFinite(v));
+      const compPs = peerMultiples.map(perShareFromMultiple).filter((v) => Number.isFinite(v));
       if (compPs.length) ranges.push({ label: `Comps (${comps.multipleName})`, low: Math.min(...compPs), base: compsResult.equityValuePerShare, high: Math.max(...compPs) });
+    }
+    if (precedentMultiples.length > 0) {
+      const precPs = precedentMultiples.map(perShareFromMultiple).filter((v) => Number.isFinite(v));
+      if (precPs.length) ranges.push({ label: `Precedent (${precedent.multipleName})`, low: Math.min(...precPs), base: precedentResult.equityValuePerShare, high: Math.max(...precPs) });
     }
     for (const m of methods) {
       if (m.recommended && (m.id === 'ddm' || m.id === 'fcfe' || m.id === 'pb') && Number.isFinite(m.perShare)) {
@@ -129,5 +145,5 @@ export function useComputed() {
     const footballField = { ranges, price: sharePrice };
 
     return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning };
-  }, [base, assumptions, wacc, bridge, dcfCfg, comps, shares, sharePrice, sector, financials]);
+  }, [base, assumptions, wacc, bridge, dcfCfg, comps, precedent, shares, sharePrice, sector, financials]);
 }

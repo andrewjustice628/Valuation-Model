@@ -26,9 +26,10 @@ export default async (req: Request): Promise<Response> => {
     `https://finnhub.io/api/v1/${path}&token=${encodeURIComponent(key)}`;
 
   try {
-    const [quoteRes, profileRes] = await Promise.all([
+    const [quoteRes, profileRes, metricRes] = await Promise.all([
       fetch(at(`quote?symbol=${encodeURIComponent(symbol)}`)),
       fetch(at(`stock/profile2?symbol=${encodeURIComponent(symbol)}`)),
+      fetch(at(`stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`)),
     ]);
     if (!quoteRes.ok || !profileRes.ok) {
       return json({ error: `Provider error (${quoteRes.status}/${profileRes.status}).` }, 502);
@@ -37,6 +38,8 @@ export default async (req: Request): Promise<Response> => {
     const profile = (await profileRes.json()) as {
       name?: string; ticker?: string; shareOutstanding?: number; currency?: string; finnhubIndustry?: string;
     };
+    const metric = metricRes.ok ? ((await metricRes.json()) as { metric?: Record<string, unknown> }).metric : undefined;
+    const beta = typeof metric?.beta === 'number' && Number.isFinite(metric.beta) ? metric.beta : null;
 
     // Finnhub reports shareOutstanding in millions.
     const sharesOutstanding =
@@ -54,6 +57,7 @@ export default async (req: Request): Promise<Response> => {
       sharesOutstanding,
       currency: profile.currency ?? null,
       industry: profile.finnhubIndustry ?? null,
+      beta,
     });
   } catch {
     return json({ error: 'Failed to reach market-data provider.' }, 502);
