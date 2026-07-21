@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useModel, AUTO_FIELDS } from '../store/useModel';
+import { useComputed } from '../store/useComputed';
+import { buildSheets } from '../lib/exportWorkbook';
 import { NumberInput, FieldLabel } from './fields';
 import { Results } from './Results';
 import { ASSUMPTION_GROUPS, BASE_FIELDS, BRIDGE_FIELDS, WACC_FIELDS } from './catalog';
@@ -15,9 +17,23 @@ function ModelBar() {
   const newModel = useModel((s) => s.newModel);
   const importSnapshot = useModel((s) => s.importSnapshot);
   const snapshot = useModel((s) => s.snapshot);
+  const company = useModel((s) => s.company);
+  const assumptions = useModel((s) => s.assumptions);
+  const historicals = useModel((s) => s.historicals);
+  const { statements, dcf, compsResult } = useComputed();
   const [name, setName] = useState(currentName);
   const [selId, setSelId] = useState('');
   useEffect(() => setName(currentName), [currentName]);
+
+  const fileBase = () => (name || company.ticker || 'valuation').replace(/\s+/g, '-');
+  const doExcel = async () => {
+    const XLSX = await import('xlsx');
+    const sheets = buildSheets({ company, assumptions, statements, historicals, dcf, compsResult });
+    const wb = XLSX.utils.book_new();
+    for (const sh of sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sh.rows), sh.name);
+    XLSX.writeFile(wb, `${fileBase()}.xlsx`);
+  };
+  const doPrint = () => window.print();
 
   const doExport = () => {
     const blob = new Blob([JSON.stringify(snapshot(), null, 2)], { type: 'application/json' });
@@ -48,9 +64,20 @@ function ModelBar() {
       <button disabled={!selId} onClick={() => selId && loadModel(selId)}>Load</button>
       <button disabled={!selId} onClick={() => { if (selId && confirm('Delete this saved model?')) { deleteModel(selId); setSelId(''); } }}>Delete</button>
       <span className="mb-sep" />
-      <button onClick={doExport}>Export</button>
+      <button onClick={doExcel} title="Download the full model as an Excel workbook">Excel</button>
+      <button onClick={doPrint} title="Print or save the results as a PDF">PDF</button>
+      <button onClick={doExport} title="Export the model as a JSON file">JSON</button>
       <label className="btn-like">Import<input type="file" accept="application/json" onChange={doImport} hidden /></label>
     </section>
+  );
+}
+
+function PrintHeader() {
+  const company = useModel((s) => s.company);
+  return (
+    <div className="print-only print-head">
+      <b>{company.name}</b> ({company.ticker}) — Equity valuation · {new Date().toLocaleDateString()}
+    </div>
   );
 }
 
@@ -220,15 +247,29 @@ function WaccSection() {
           </div>
         ))}
         <div className="cell">
-          <FieldLabel fieldId="dcf.longTermGrowth" label="Long-Term Growth" />
-          <NumberInput value={dcf.longTermGrowth} percent onCommit={(n) => setDcf({ longTermGrowth: n })} />
-        </div>
-        <div className="cell">
           <FieldLabel fieldId="dcf.stub" label="Stub (portion of yr 1)" />
           <NumberInput value={dcf.stub} onCommit={(n) => setDcf({ stub: n })} />
         </div>
         <div className="cell">
-          <span className="field-label"><span className="lbl">Terminal value basis</span></span>
+          <span className="field-label"><span className="lbl">Terminal method</span></span>
+          <select value={dcf.terminalMethod} onChange={(e) => setDcf({ terminalMethod: e.target.value as 'perpetuity' | 'exitMultiple' })}>
+            <option value="perpetuity">Perpetuity growth</option>
+            <option value="exitMultiple">Exit multiple (EV/EBITDA)</option>
+          </select>
+        </div>
+        {dcf.terminalMethod === 'perpetuity' ? (
+          <div className="cell">
+            <FieldLabel fieldId="dcf.longTermGrowth" label="Long-Term Growth" />
+            <NumberInput value={dcf.longTermGrowth} percent onCommit={(n) => setDcf({ longTermGrowth: n })} />
+          </div>
+        ) : (
+          <div className="cell">
+            <FieldLabel fieldId="dcf.exitMultiple" label="Exit EV/EBITDA" />
+            <NumberInput value={dcf.exitMultiple} onCommit={(n) => setDcf({ exitMultiple: n })} />
+          </div>
+        )}
+        <div className="cell">
+          <span className="field-label"><span className="lbl">Perpetuity basis</span></span>
           <select value={dcf.terminalBasis} onChange={(e) => setDcf({ terminalBasis: e.target.value as 'nominal' | 'faithful' })}>
             <option value="nominal">Nominal (corrected)</option>
             <option value="faithful">Faithful to sheet</option>
@@ -318,6 +359,7 @@ export function App() {
         <p className="sub">Three-statement model → DCF &amp; comps. All math runs in your browser.</p>
       </header>
       <ModelBar />
+      <PrintHeader />
       <CompanyHeader />
       <div className="layout">
         <div className="inputs">

@@ -132,6 +132,20 @@ td.sens-base { outline: 2px solid var(--text); outline-offset: -2px; font-weight
 .ff-val { fill: var(--muted); font-size: 10.5px; }
 .ff-price { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 4 3; }
 .ff-price-lbl { fill: var(--good); font-size: 11px; }
+
+.print-only { display: none; }
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; }
+  .print-only { display: block; }
+  .print-head { font-size: 15px; margin: 0 0 10px; color: #000; }
+  .modelbar, .company, .inputs, .tabs, .rename, .copy, .field-label .rename,
+  input[type='file'], .btn-like { display: none !important; }
+  .layout { display: block; }
+  .output { position: static; }
+  .wrap { max-width: none; padding: 0; }
+  .panel, .card, details { break-inside: avoid; }
+}
 .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
 .tabs button.on { background: var(--accent); color: #05121f; border-color: var(--accent); font-weight: 600; }
 .output { position: sticky; top: 16px; }

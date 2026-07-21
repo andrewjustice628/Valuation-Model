@@ -52,6 +52,10 @@ export interface DcfInputs {
   sharesOutstanding: number;
   /** If set, use this WACC directly instead of computing it from CAPM (for sensitivity). */
   waccOverride?: number;
+  /** Terminal value method: perpetuity growth (default) or an exit EV/EBITDA multiple. */
+  terminalMethod?: 'perpetuity' | 'exitMultiple';
+  /** Exit EV/EBITDA multiple applied to terminal-year EBITDA (when terminalMethod = 'exitMultiple'). */
+  exitMultiple?: number;
   /**
    * Terminal-value basis. 'nominal' grows the last forecast year's UFCF
    * (financially correct; spec Q1 fix). 'faithful' reproduces the sheet's
@@ -84,6 +88,12 @@ export interface DcfResult {
   pvOfForecast: number;
   terminalValue: number;
   pvOfTerminalValue: number;
+  /** Terminal-year EBITDA (basis for the exit multiple / cross-check). */
+  terminalEbitda: number;
+  /** Cross-check: terminal value expressed as an EV/EBITDA multiple. */
+  impliedExitMultiple: number;
+  /** Cross-check: perpetuity growth implied by the terminal value. */
+  impliedPerpetuityGrowth: number;
   enterpriseValue: number;
   netDebt: number;
   equityValue: number;

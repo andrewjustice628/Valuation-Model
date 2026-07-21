@@ -15,21 +15,22 @@ function SensitivityPanel({ s }: { s: SensitivityResult }) {
     return `hsl(${Math.round(8 + t * 132)} 42% 20%)`; // red → green
   };
   const money = (x: number) => (Number.isFinite(x) ? x.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—');
+  const colHead = (v: number) => (s.colKind === 'multiple' ? `${v.toFixed(1)}×` : `${(v * 100).toFixed(1)}%`);
   return (
     <section className="panel">
       <h3>Sensitivity — value / share</h3>
       <table className="sens">
         <thead>
           <tr>
-            <th>WACC \ g→</th>
-            {s.growthValues.map((g, i) => <th key={i}>{(g * 100).toFixed(1)}%</th>)}
+            <th>WACC \ {s.colKind === 'multiple' ? 'exit×' : 'g'}→</th>
+            {s.colValues.map((c, i) => <th key={i}>{colHead(c)}</th>)}
           </tr>
         </thead>
         <tbody>
           {s.waccValues.map((w, ri) => (
             <tr key={ri}>
               <th>{(w * 100).toFixed(1)}%</th>
-              {s.growthValues.map((_, ci) => {
+              {s.colValues.map((_, ci) => {
                 const v = s.perShare[ri][ci];
                 const isBase = ri === s.baseRow && ci === s.baseCol;
                 return <td key={ci} className={isBase ? 'sens-base' : ''} style={{ background: bg(v) }}>{money(v)}</td>;
@@ -204,6 +205,8 @@ export function Results() {
           <li><span>Cost of equity</span><b>{pct(dcf.wacc.costOfEquity)}</b></li>
           <li><span>PV of forecast</span><b>{money(dcf.pvOfForecast)}</b></li>
           <li><span>PV of terminal value</span><b>{money(dcf.pvOfTerminalValue)}</b></li>
+          <li><span>Terminal ≈ exit multiple</span><b>{Number.isFinite(dcf.impliedExitMultiple) ? `${dcf.impliedExitMultiple.toFixed(1)}×` : '—'}</b></li>
+          <li><span>Terminal ≈ perpetuity g</span><b>{pct(dcf.impliedPerpetuityGrowth)}</b></li>
           <li><span>Enterprise value</span><b>{money(dcf.enterpriseValue)}</b></li>
           <li><span>Net debt</span><b>{money(dcf.netDebt)}</b></li>
           <li><span>Equity value</span><b>{money(dcf.equityValue)}</b></li>

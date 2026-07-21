@@ -35,6 +35,8 @@ export interface DcfConfig {
   stub: number;
   longTermGrowth: number;
   terminalBasis: 'nominal' | 'faithful';
+  terminalMethod: 'perpetuity' | 'exitMultiple';
+  exitMultiple: number;
 }
 
 type FetchStatus = 'idle' | 'loading' | 'ok' | 'error';
@@ -186,7 +188,7 @@ function initialModel(): ModelSnapshot {
     assumptions: YEARS.map((y, i) => defaultAssumption(y, i)),
     wacc: { ...defaultWacc },
     bridge: { ...defaultBridge },
-    dcf: { stub: 1, longTermGrowth: 0.025, terminalBasis: 'nominal' },
+    dcf: { stub: 1, longTermGrowth: 0.025, terminalBasis: 'nominal', terminalMethod: 'perpetuity', exitMultiple: 12 },
     comps: {
       multipleName: 'EV/EBITDA',
       peers: [{ ticker: '', multiple: null }, { ticker: '', multiple: null }, { ticker: '', multiple: null }],

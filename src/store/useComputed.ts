@@ -38,6 +38,8 @@ export function useComputed() {
       bridge: effectiveBridge,
       sharesOutstanding: shares,
       terminalBasis: dcfCfg.terminalBasis,
+      terminalMethod: dcfCfg.terminalMethod,
+      exitMultiple: dcfCfg.exitMultiple,
     };
     const dcf = runDcf(dcfInput);
     const last = statements.years[statements.years.length - 1];

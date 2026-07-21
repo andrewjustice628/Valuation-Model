@@ -25,7 +25,8 @@ describe('sensitivityMatrix', () => {
 
   it('is 5×5 with base at the center', () => {
     expect(m.waccValues).toHaveLength(5);
-    expect(m.growthValues).toHaveLength(5);
+    expect(m.colValues).toHaveLength(5);
+    expect(m.colKind).toBe('growth');
     expect(m.baseRow).toBe(2);
     expect(m.baseCol).toBe(2);
   });
@@ -49,5 +50,13 @@ describe('sensitivityMatrix', () => {
         expect(m.perShare[row][col]).toBeGreaterThan(m.perShare[row][col - 1]);
       }
     }
+  });
+
+  it('uses an exit-multiple column axis when that method is selected', () => {
+    const em = sensitivityMatrix({ ...input, terminalMethod: 'exitMultiple', exitMultiple: 12 }, { n: 5 });
+    expect(em.colKind).toBe('multiple');
+    expect(em.colValues[2]).toBeCloseTo(12, 6);
+    // Higher exit multiple → higher value across a row.
+    for (let col = 1; col < 5; col++) expect(em.perShare[2][col]).toBeGreaterThan(em.perShare[2][col - 1]);
   });
 });

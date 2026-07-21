@@ -62,12 +62,24 @@ export function runDcf(input: DcfInputs): DcfResult {
 
   const last = detail[detail.length - 1];
   const terminalPeriod = detail.length - 1 + stub; // discounted like the final year
-  // 'nominal' (default, spec Q1 fix): grow the last year's nominal UFCF.
-  // 'faithful': reproduce the sheet growing the PV of the last year.
-  const terminalFcf =
-    basis === 'faithful' ? last.presentValue * (1 + g) : last.ufcf * (1 + g);
-  const terminalValue = terminalFcf / (r - g);
+  const terminalEbitda = last.ebitda;
+
+  let terminalValue: number;
+  if ((input.terminalMethod ?? 'perpetuity') === 'exitMultiple') {
+    // Terminal value = terminal-year EBITDA × exit EV/EBITDA multiple.
+    terminalValue = terminalEbitda * (input.exitMultiple ?? 0);
+  } else {
+    // Perpetuity growth. 'nominal' (default, spec Q1 fix): grow nominal UFCF;
+    // 'faithful' reproduces the sheet growing the PV of the last year.
+    const terminalFcf = basis === 'faithful' ? last.presentValue * (1 + g) : last.ufcf * (1 + g);
+    terminalValue = terminalFcf / (r - g);
+  }
   const pvOfTerminalValue = presentValue(r, terminalPeriod, terminalValue);
+
+  // Cross-checks: express the terminal value both ways regardless of method.
+  const impliedExitMultiple = terminalEbitda !== 0 ? terminalValue / terminalEbitda : NaN;
+  const gDenom = terminalValue + last.ufcf;
+  const impliedPerpetuityGrowth = gDenom !== 0 ? (terminalValue * r - last.ufcf) / gDenom : NaN;
 
   const enterpriseValue = pvOfForecast + pvOfTerminalValue;
   const netDebt = computeNetDebt(input.bridge);
@@ -81,6 +93,9 @@ export function runDcf(input: DcfInputs): DcfResult {
     pvOfForecast,
     terminalValue,
     pvOfTerminalValue,
+    terminalEbitda,
+    impliedExitMultiple,
+    impliedPerpetuityGrowth,
     enterpriseValue,
     netDebt,
     equityValue,
