@@ -110,6 +110,19 @@ th.fdiv, td.fdiv { border-left: 2px solid var(--accent); }
 .diag-item.error b { color: var(--bad); }
 .diag-item.warn b { color: #e5b567; }
 .diag-item.info { color: var(--muted); }
+
+.modelbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
+.mb-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.mb-name { font-weight: 600; min-width: 160px; }
+.mb-sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+.btn-like { cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2);
+  padding: 5px 10px; font-size: 14px; }
+.btn-like:hover { border-color: var(--accent); }
+
+table.sens td, table.sens th { text-align: center; padding: 5px 8px; font-variant-numeric: tabular-nums; }
+table.sens thead th, table.sens tbody th { color: var(--muted); font-weight: 600; }
+td.sens-base { outline: 2px solid var(--text); outline-offset: -2px; font-weight: 700; }
 .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
 .tabs button.on { background: var(--accent); color: #05121f; border-color: var(--accent); font-weight: 600; }
 .output { position: sticky; top: 16px; }

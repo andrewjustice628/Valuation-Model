@@ -1,9 +1,58 @@
+import { useState, useEffect } from 'react';
 import { useModel, AUTO_FIELDS } from '../store/useModel';
 import { NumberInput, FieldLabel } from './fields';
 import { Results } from './Results';
 import { ASSUMPTION_GROUPS, BASE_FIELDS, BRIDGE_FIELDS, WACC_FIELDS } from './catalog';
 
 const MULTIPLES = ['EV/EBITDA', 'P/E', 'P/S', 'P/B', 'EV/Sales'];
+
+function ModelBar() {
+  const currentName = useModel((s) => s.currentName);
+  const savedModels = useModel((s) => s.savedModels);
+  const saveModel = useModel((s) => s.saveModel);
+  const loadModel = useModel((s) => s.loadModel);
+  const deleteModel = useModel((s) => s.deleteModel);
+  const newModel = useModel((s) => s.newModel);
+  const importSnapshot = useModel((s) => s.importSnapshot);
+  const snapshot = useModel((s) => s.snapshot);
+  const [name, setName] = useState(currentName);
+  const [selId, setSelId] = useState('');
+  useEffect(() => setName(currentName), [currentName]);
+
+  const doExport = () => {
+    const blob = new Blob([JSON.stringify(snapshot(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(name || 'model').replace(/\s+/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const doImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) file.text().then((t) => { try { importSnapshot(JSON.parse(t)); } catch { alert('Invalid model file.'); } });
+    e.target.value = '';
+  };
+
+  return (
+    <section className="modelbar">
+      <span className="mb-label">Model</span>
+      <input className="mb-name" value={name} onChange={(e) => setName(e.target.value)} />
+      <button className="fetch" onClick={() => saveModel(name.trim() || 'Untitled')}>Save</button>
+      <button onClick={newModel}>New</button>
+      <span className="mb-sep" />
+      <select value={selId} onChange={(e) => setSelId(e.target.value)}>
+        <option value="">Saved models ({savedModels.length})…</option>
+        {savedModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+      </select>
+      <button disabled={!selId} onClick={() => selId && loadModel(selId)}>Load</button>
+      <button disabled={!selId} onClick={() => { if (selId && confirm('Delete this saved model?')) { deleteModel(selId); setSelId(''); } }}>Delete</button>
+      <span className="mb-sep" />
+      <button onClick={doExport}>Export</button>
+      <label className="btn-like">Import<input type="file" accept="application/json" onChange={doImport} hidden /></label>
+    </section>
+  );
+}
 
 function CompanyHeader() {
   const company = useModel((s) => s.company);
@@ -268,6 +317,7 @@ export function App() {
         <h1>Equity Valuation Model</h1>
         <p className="sub">Three-statement model → DCF &amp; comps. All math runs in your browser.</p>
       </header>
+      <ModelBar />
       <CompanyHeader />
       <div className="layout">
         <div className="inputs">

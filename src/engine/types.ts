@@ -50,6 +50,8 @@ export interface DcfInputs {
   longTermGrowth: number;
   bridge: NetDebtBridge;
   sharesOutstanding: number;
+  /** If set, use this WACC directly instead of computing it from CAPM (for sensitivity). */
+  waccOverride?: number;
   /**
    * Terminal-value basis. 'nominal' grows the last forecast year's UFCF
    * (financially correct; spec Q1 fix). 'faithful' reproduces the sheet's

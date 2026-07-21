@@ -29,7 +29,8 @@ export function computeNetDebt(b: NetDebtBridge): number {
 
 export function runDcf(input: DcfInputs): DcfResult {
   const { years, stub, longTermGrowth: g, sharesOutstanding } = input;
-  const wacc = computeWacc(input.wacc);
+  const computed = computeWacc(input.wacc);
+  const wacc = input.waccOverride != null ? { ...computed, wacc: input.waccOverride } : computed;
   const r = wacc.wacc;
   const basis = input.terminalBasis ?? 'nominal';
 

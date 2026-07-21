@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { activeProvider } from '../lib/marketData';
 import { RAMP_SEED_FIELDS, revenueGrowthFromHistory, effectiveTaxRate } from '../lib/seed';
+import { loadAll, saveAll, type SavedModel } from '../lib/persistence';
 import type { HistoricalYear } from '../lib/historicals';
 import type { BaseYear, ForecastAssumptions } from '../engine/statements';
 import type { NetDebtBridge, WaccAssumptions } from '../engine/types';
@@ -163,6 +164,43 @@ const markAll = (o: Record<string, boolean[]>, field: string): Record<string, bo
   [field]: [true, true, true, true, true],
 });
 
+/** The serializable definition of a model (everything a save/load must carry). */
+export interface ModelSnapshot {
+  company: CompanyInfo;
+  base: BaseYear;
+  assumptions: ForecastAssumptions[];
+  wacc: WaccAssumptions;
+  bridge: NetDebtBridge;
+  dcf: DcfConfig;
+  comps: CompsConfig;
+  labels: Record<string, string>;
+  historicals: HistoricalYear[];
+  historicalBase: Array<Record<string, number>>;
+  manualOverrides: Record<string, boolean[]>;
+}
+
+function initialModel(): ModelSnapshot {
+  return {
+    company: { ticker: 'AAPL', name: 'Example Corp', unit: 'Thousands', sharePrice: 0, sharesOutstanding: 1000 },
+    base: { ...defaultBase },
+    assumptions: YEARS.map((y, i) => defaultAssumption(y, i)),
+    wacc: { ...defaultWacc },
+    bridge: { ...defaultBridge },
+    dcf: { stub: 1, longTermGrowth: 0.025, terminalBasis: 'nominal' },
+    comps: {
+      multipleName: 'EV/EBITDA',
+      peers: [{ ticker: '', multiple: null }, { ticker: '', multiple: null }, { ticker: '', multiple: null }],
+      companyMetricOverride: null,
+    },
+    labels: {},
+    historicals: [],
+    historicalBase: [],
+    manualOverrides: {},
+  };
+}
+
+const TRANSIENT = { quoteStatus: 'idle' as FetchStatus, quoteError: null, financialsStatus: 'idle' as FetchStatus, financialsMessage: null };
+
 export interface ModelState {
   company: CompanyInfo;
   base: BaseYear;
@@ -180,7 +218,15 @@ export interface ModelState {
   quoteError: string | null;
   financialsStatus: FetchStatus;
   financialsMessage: string | null;
+  savedModels: SavedModel<ModelSnapshot>[];
+  currentName: string;
 
+  saveModel: (name: string) => void;
+  loadModel: (id: string) => void;
+  deleteModel: (id: string) => void;
+  newModel: () => void;
+  importSnapshot: (snapshot: ModelSnapshot) => void;
+  snapshot: () => ModelSnapshot;
   setCompany: (patch: Partial<CompanyInfo>) => void;
   setBase: (field: keyof BaseYear, value: number) => void;
   setAssumption: (index: number, field: keyof ForecastAssumptions, value: number) => void;
@@ -201,29 +247,46 @@ export interface ModelState {
 }
 
 export const useModel = create<ModelState>((set, get) => ({
-  company: { ticker: 'AAPL', name: 'Example Corp', unit: 'Thousands', sharePrice: 0, sharesOutstanding: 1000 },
-  base: { ...defaultBase },
-  assumptions: YEARS.map((y, i) => defaultAssumption(y, i)),
-  wacc: { ...defaultWacc },
-  bridge: { ...defaultBridge },
-  dcf: { stub: 1, longTermGrowth: 0.025, terminalBasis: 'nominal' },
-  comps: {
-    multipleName: 'EV/EBITDA',
-    peers: [
-      { ticker: '', multiple: null },
-      { ticker: '', multiple: null },
-      { ticker: '', multiple: null },
-    ],
-    companyMetricOverride: null,
+  ...initialModel(),
+  ...TRANSIENT,
+  savedModels: loadAll<ModelSnapshot>(),
+  currentName: 'Untitled',
+
+  snapshot: () => {
+    const s = get();
+    return {
+      company: s.company, base: s.base, assumptions: s.assumptions, wacc: s.wacc, bridge: s.bridge,
+      dcf: s.dcf, comps: s.comps, labels: s.labels, historicals: s.historicals,
+      historicalBase: s.historicalBase, manualOverrides: s.manualOverrides,
+    };
   },
-  labels: {},
-  historicals: [],
-  historicalBase: [],
-  manualOverrides: {},
-  quoteStatus: 'idle',
-  quoteError: null,
-  financialsStatus: 'idle',
-  financialsMessage: null,
+  saveModel: (name) =>
+    set((s) => {
+      const snapshot = get().snapshot();
+      const list = [...s.savedModels];
+      const idx = list.findIndex((m) => m.name === name);
+      const entry: SavedModel<ModelSnapshot> = {
+        id: idx >= 0 ? list[idx].id : `m_${Date.now()}`, name, savedAt: Date.now(), snapshot,
+      };
+      if (idx >= 0) list[idx] = entry;
+      else list.push(entry);
+      saveAll(list);
+      return { savedModels: list, currentName: name };
+    }),
+  loadModel: (id) =>
+    set((s) => {
+      const m = s.savedModels.find((x) => x.id === id);
+      if (!m) return {};
+      return { ...m.snapshot, ...TRANSIENT, currentName: m.name };
+    }),
+  deleteModel: (id) =>
+    set((s) => {
+      const list = s.savedModels.filter((x) => x.id !== id);
+      saveAll(list);
+      return { savedModels: list };
+    }),
+  newModel: () => set(() => ({ ...initialModel(), ...TRANSIENT, currentName: 'Untitled' })),
+  importSnapshot: (snapshot) => set(() => ({ ...snapshot, ...TRANSIENT, currentName: 'Imported' })),
 
   setCompany: (patch) => set((s) => ({ company: { ...s.company, ...patch } })),
   setBase: (field, value) =>

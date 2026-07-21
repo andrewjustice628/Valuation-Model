@@ -8,6 +8,7 @@ import { buildStatements } from '../engine/statements';
 import { runDcf } from '../engine/dcf';
 import { runComps } from '../engine/comps';
 import { runDiagnostics } from '../engine/diagnostics';
+import { sensitivityMatrix } from '../engine/sensitivity';
 
 export function useComputed() {
   const base = useModel((s) => s.base);
@@ -28,7 +29,7 @@ export function useComputed() {
       debt: base.longTermDebt + base.commercialPaper,
       cashAndEquivalents: base.cash,
     };
-    const dcf = runDcf({
+    const dcfInput = {
       years: statements.dcfYears,
       wacc,
       stub: dcfCfg.stub,
@@ -36,7 +37,8 @@ export function useComputed() {
       bridge: effectiveBridge,
       sharesOutstanding: shares,
       terminalBasis: dcfCfg.terminalBasis,
-    });
+    };
+    const dcf = runDcf(dcfInput);
     const last = statements.years[statements.years.length - 1];
     const terminalEbitda = last ? last.incomeStatement.ebitda : 0;
     const companyMetric = comps.companyMetricOverride ?? terminalEbitda;
@@ -51,6 +53,7 @@ export function useComputed() {
       sharesOutstanding: shares,
     });
     const diagnostics = runDiagnostics({ dcf, statements, longTermGrowth: dcfCfg.longTermGrowth, sharePrice });
-    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics };
+    const sensitivity = sensitivityMatrix(dcfInput, { n: 5 });
+    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity };
   }, [base, assumptions, wacc, bridge, dcfCfg, comps, shares, sharePrice]);
 }

@@ -3,6 +3,45 @@ import { useModel } from '../store/useModel';
 import { useComputed } from '../store/useComputed';
 import type { HistoricalYear } from '../lib/historicals';
 import type { YearStatements } from '../engine/statements';
+import type { SensitivityResult } from '../engine/sensitivity';
+
+function SensitivityPanel({ s }: { s: SensitivityResult }) {
+  const finite = s.perShare.flat().filter((v) => Number.isFinite(v));
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const bg = (v: number) => {
+    if (!Number.isFinite(v) || max === min) return undefined;
+    const t = (v - min) / (max - min); // 0 (low) → 1 (high)
+    return `hsl(${Math.round(8 + t * 132)} 42% 20%)`; // red → green
+  };
+  const money = (x: number) => (Number.isFinite(x) ? x.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—');
+  return (
+    <section className="panel">
+      <h3>Sensitivity — value / share</h3>
+      <table className="sens">
+        <thead>
+          <tr>
+            <th>WACC \ g→</th>
+            {s.growthValues.map((g, i) => <th key={i}>{(g * 100).toFixed(1)}%</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {s.waccValues.map((w, ri) => (
+            <tr key={ri}>
+              <th>{(w * 100).toFixed(1)}%</th>
+              {s.growthValues.map((_, ci) => {
+                const v = s.perShare[ri][ci];
+                const isBase = ri === s.baseRow && ci === s.baseCol;
+                return <td key={ci} className={isBase ? 'sens-base' : ''} style={{ background: bg(v) }}>{money(v)}</td>;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="note">Rows = WACC, columns = terminal growth. Outlined cell = your current assumptions.</p>
+    </section>
+  );
+}
 
 type StmtRow = { label: string; h: (h: HistoricalYear) => number | null; f: (y: YearStatements) => number; em?: boolean };
 const TITLES = { is: 'Income Statement', bs: 'Balance Sheet', cf: 'Cash Flow' } as const;
@@ -70,7 +109,7 @@ function Diagnostics({ findings }: { findings: { level: 'error' | 'warn' | 'info
 }
 
 export function Results() {
-  const { statements, dcf, compsResult, terminalEbitda, diagnostics } = useComputed();
+  const { statements, dcf, compsResult, terminalEbitda, diagnostics, sensitivity } = useComputed();
   const historicals = useModel((s) => s.historicals);
   const [tab, setTab] = useState<'is' | 'bs' | 'cf'>('is');
 
@@ -115,6 +154,8 @@ export function Results() {
           </tbody>
         </table>
       </section>
+
+      <SensitivityPanel s={sensitivity} />
 
       <section className="panel">
         <div className="tabs">
