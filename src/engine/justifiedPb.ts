@@ -21,7 +21,10 @@ export interface JustifiedPbResult {
 export function runJustifiedPb(i: JustifiedPbInput): JustifiedPbResult {
   const { bookEquity, roe, costOfEquity: r, growth: g, sharesOutstanding } = i;
   const justifiedPb = r > g ? (roe - g) / (r - g) : NaN;
-  const equityValue = bookEquity * justifiedPb;
-  const perShare = sharesOutstanding > 0 ? equityValue / sharesOutstanding : NaN;
+  // The model is only meaningful with a positive P/B (ROE > growth) and
+  // positive book equity; otherwise the per-share figure isn't interpretable.
+  const applicable = Number.isFinite(justifiedPb) && justifiedPb > 0 && bookEquity > 0 && sharesOutstanding > 0;
+  const equityValue = applicable ? bookEquity * justifiedPb : NaN;
+  const perShare = applicable ? equityValue / sharesOutstanding : NaN;
   return { justifiedPb, equityValue, perShare };
 }
