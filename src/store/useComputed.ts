@@ -9,6 +9,7 @@ import { runDcf } from '../engine/dcf';
 import { runComps } from '../engine/comps';
 import { runDiagnostics } from '../engine/diagnostics';
 import { sensitivityMatrix } from '../engine/sensitivity';
+import { impliedRevenueGrowth } from '../engine/reverseDcf';
 
 export function useComputed() {
   const base = useModel((s) => s.base);
@@ -54,6 +55,27 @@ export function useComputed() {
     });
     const diagnostics = runDiagnostics({ dcf, statements, longTermGrowth: dcfCfg.longTermGrowth, sharePrice });
     const sensitivity = sensitivityMatrix(dcfInput, { n: 5 });
-    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity };
+
+    // Reverse DCF — the revenue growth the current price implies.
+    const impliedGrowth = sharePrice > 0
+      ? impliedRevenueGrowth({ base, assumptions, wacc, stub: dcfCfg.stub, longTermGrowth: dcfCfg.longTermGrowth, bridge: effectiveBridge, sharesOutstanding: shares, terminalBasis: dcfCfg.terminalBasis, targetPerShare: sharePrice })
+      : null;
+    const assumedGrowth = assumptions.length
+      ? assumptions.reduce((s, a) => s + a.revenueGrowth, 0) / assumptions.length
+      : 0;
+
+    // Football field — value-per-share ranges by method.
+    const dcfVals = sensitivity.perShare.flat().filter((v) => Number.isFinite(v));
+    const ranges: { label: string; low: number; base: number; high: number }[] = [
+      { label: 'DCF (WACC/growth range)', low: Math.min(...dcfVals), base: dcf.equityValuePerShare, high: Math.max(...dcfVals) },
+    ];
+    if (peerMultiples.length > 0) {
+      const psFromMultiple = (m: number) => (shares > 0 ? (companyMetric * m - dcf.netDebt) / shares : NaN);
+      const compPs = peerMultiples.map(psFromMultiple).filter((v) => Number.isFinite(v));
+      if (compPs.length) ranges.push({ label: `Comps (${comps.multipleName})`, low: Math.min(...compPs), base: compsResult.equityValuePerShare, high: Math.max(...compPs) });
+    }
+    const footballField = { ranges, price: sharePrice };
+
+    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField };
   }, [base, assumptions, wacc, bridge, dcfCfg, comps, shares, sharePrice]);
 }

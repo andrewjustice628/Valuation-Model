@@ -108,8 +108,69 @@ function Diagnostics({ findings }: { findings: { level: 'error' | 'warn' | 'info
   );
 }
 
+function FootballField({ ranges, price }: { ranges: { label: string; low: number; base: number; high: number }[]; price: number }) {
+  const vals = ranges.flatMap((r) => [r.low, r.high, r.base]).concat(price > 0 ? [price] : []).filter((v) => Number.isFinite(v));
+  if (vals.length === 0) return null;
+  let min = Math.min(...vals);
+  let max = Math.max(...vals);
+  if (min === max) { min -= 1; max += 1; }
+  const pad = (max - min) * 0.08;
+  min -= pad; max += pad;
+  const W = 640, L = 180, R = W - 14, plotW = R - L, rowH = 42, top = 16;
+  const H = top + ranges.length * rowH + 34;
+  const x = (v: number) => L + ((v - min) / (max - min)) * plotW;
+  const money = (v: number) => (Number.isFinite(v) ? `$${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—');
+  return (
+    <section className="panel">
+      <h3>Football field — value / share</h3>
+      <div className="ff-wrap">
+        <svg viewBox={`0 0 ${W} ${H}`} className="ff" role="img" aria-label="Valuation ranges by method">
+          {ranges.map((r, i) => {
+            const y = top + i * rowH + rowH / 2;
+            const x1 = x(Math.min(r.low, r.high));
+            const x2 = x(Math.max(r.low, r.high));
+            return (
+              <g key={i}>
+                <text x={10} y={y + 4} className="ff-label">{r.label}</text>
+                <rect x={x1} y={y - 9} width={Math.max(2, x2 - x1)} height={18} rx={4} className="ff-bar" />
+                <line x1={x(r.base)} x2={x(r.base)} y1={y - 12} y2={y + 12} className="ff-base" />
+                <text x={x1 - 5} y={y + 4} textAnchor="end" className="ff-val">{money(r.low)}</text>
+                <text x={x2 + 5} y={y + 4} className="ff-val">{money(r.high)}</text>
+              </g>
+            );
+          })}
+          {price > 0 && (
+            <g>
+              <line x1={x(price)} x2={x(price)} y1={top - 8} y2={top + ranges.length * rowH + 2} className="ff-price" />
+              <text x={x(price)} y={top + ranges.length * rowH + 18} textAnchor="middle" className="ff-price-lbl">Price {money(price)}</text>
+            </g>
+          )}
+        </svg>
+      </div>
+      <p className="note">Bars span each method's value range; the tick marks the base case. Dashed line = current market price.</p>
+    </section>
+  );
+}
+
+function ReverseDcf({ implied, assumed, price }: { implied: number | null; assumed: number; price: number }) {
+  if (!(price > 0)) return null;
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  return (
+    <section className="panel">
+      <h3>Reverse DCF — what's priced in</h3>
+      {implied == null ? (
+        <p className="note">The current price implies revenue growth outside a plausible range (below −50% or above +100%), so it can't be shown as a single rate.</p>
+      ) : (
+        <p style={{ margin: 0 }}>
+          At the current price of <b>${price.toFixed(2)}</b>, the market is pricing in roughly <b>{pct(implied)}</b> annual revenue growth over the forecast. Your model assumes an average of <b>{pct(assumed)}</b>.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function Results() {
-  const { statements, dcf, compsResult, terminalEbitda, diagnostics, sensitivity } = useComputed();
+  const { statements, dcf, compsResult, terminalEbitda, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField } = useComputed();
   const historicals = useModel((s) => s.historicals);
   const [tab, setTab] = useState<'is' | 'bs' | 'cf'>('is');
 
@@ -132,6 +193,9 @@ export function Results() {
           <UpsideBadge target={compsResult.equityValuePerShare} />
         </article>
       </section>
+
+      <FootballField ranges={footballField.ranges} price={footballField.price} />
+      <ReverseDcf implied={impliedGrowth} assumed={assumedGrowth} price={footballField.price} />
 
       <section className="panel">
         <h3>DCF bridge</h3>
