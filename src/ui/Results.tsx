@@ -171,7 +171,7 @@ function ReverseDcf({ implied, assumed, price }: { implied: number | null; assum
 }
 
 export function Results() {
-  const { statements, dcf, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector } = useComputed();
+  const { statements, dcf, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning } = useComputed();
   const historicals = useModel((s) => s.historicals);
   const [tab, setTab] = useState<'is' | 'bs' | 'cf'>('is');
 
@@ -181,6 +181,7 @@ export function Results() {
       <p className="note" style={{ marginTop: 0 }}>
         Sector: <b>{sector}</b> — methods that fit it are marked <span className="rec-badge">recommended</span>.
       </p>
+      {financialsWarning && <p className="note diag-warn">⚠️ {financialsWarning}</p>}
       <section className="cards methods">
         {methods.map((m) => (
           <article key={m.id} className={`card ${m.recommended ? 'rec' : 'dim'}`}>

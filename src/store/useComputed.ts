@@ -96,6 +96,11 @@ export function useComputed() {
     const ddmPerShare = usesFinancials ? finDdmPerShare : ddm.perShare;
     const ddmNote = usesFinancials ? 'Gordon DDM from ROE/payout' : 'Forecast dividends @ cost of equity';
 
+    const financialsWarning =
+      usesFinancials && !(costOfEquity > gFin)
+        ? `Sustainable growth ${(gFin * 100).toFixed(1)}% is at or above the cost of equity ${(costOfEquity * 100).toFixed(1)}% — the single-stage DDM / P&B can't value this. Use a lower normalized ROE, a higher payout, or set the WACC/CAPM inputs to the bank's own (a higher beta raises cost of equity).`
+        : null;
+
     const rec = new Set(SECTOR_METHODS[sector]);
     const methods = [
       { id: 'dcf', label: 'Discounted Cash Flow', perShare: dcf.equityValuePerShare, note: 'Unlevered FCF → enterprise value', recommended: rec.has('dcf') },
@@ -122,6 +127,6 @@ export function useComputed() {
     }
     const footballField = { ranges, price: sharePrice };
 
-    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector };
+    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning };
   }, [base, assumptions, wacc, bridge, dcfCfg, comps, shares, sharePrice, sector, financials]);
 }

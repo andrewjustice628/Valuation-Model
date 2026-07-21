@@ -88,6 +88,7 @@ thead th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .card h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rec-badge { font-size: 10px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent);
   border-radius: 999px; padding: 1px 7px; text-transform: uppercase; letter-spacing: .03em; }
+.diag-warn { color: #e5b567; }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
 .panel h3 { margin: 0 0 10px; font-size: 14px; }
