@@ -21,6 +21,7 @@ export interface ExportInput {
   historicals: HistoricalYear[];
   dcf: DcfResult;
   compsResult: CompsResult;
+  methods?: { label: string; perShare: number }[];
 }
 
 export interface Sheet {
@@ -31,7 +32,7 @@ export interface Sheet {
 type Cell = string | number;
 const num = (v: number | null | undefined): Cell => (typeof v === 'number' && Number.isFinite(v) ? v : '');
 
-export function buildSheets({ company, assumptions, statements, historicals, dcf, compsResult }: ExportInput): Sheet[] {
+export function buildSheets({ company, assumptions, statements, historicals, dcf, compsResult, methods }: ExportInput): Sheet[] {
   const histY = historicals.map((h) => `${h.fiscalYear}A`);
   const foreY = statements.years.map((y) => `${y.incomeStatement.fiscalYear}E`);
 
@@ -45,8 +46,10 @@ export function buildSheets({ company, assumptions, statements, historicals, dcf
       ['Share price', num(company.sharePrice)],
       ['Shares outstanding', num(company.sharesOutstanding)],
       [],
-      ['DCF value / share', num(dcf.equityValuePerShare)],
-      ['Comps value / share', num(compsResult.equityValuePerShare)],
+      ['Value / share by method'],
+      ...(methods && methods.length
+        ? methods.map((m) => [m.label, num(m.perShare)])
+        : [['DCF value / share', num(dcf.equityValuePerShare)], ['Comps value / share', num(compsResult.equityValuePerShare)]]),
       [],
       ['WACC', num(dcf.wacc.wacc)],
       ['PV of forecast', num(dcf.pvOfForecast)],

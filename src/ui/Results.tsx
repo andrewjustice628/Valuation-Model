@@ -171,28 +171,25 @@ function ReverseDcf({ implied, assumed, price }: { implied: number | null; assum
 }
 
 export function Results() {
-  const { statements, dcf, compsResult, terminalEbitda, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField } = useComputed();
+  const { statements, dcf, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector } = useComputed();
   const historicals = useModel((s) => s.historicals);
   const [tab, setTab] = useState<'is' | 'bs' | 'cf'>('is');
 
   return (
     <div className="results">
       <Diagnostics findings={diagnostics} />
-      <section className="cards">
-        <article className="card">
-          <h2>Discounted Cash Flow</h2>
-          <div className="value">{price(dcf.equityValuePerShare)}</div>
-          <div className="value-label">equity value / share</div>
-          <UpsideBadge target={dcf.equityValuePerShare} />
-        </article>
-        <article className="card">
-          <h2>Comparable Companies</h2>
-          <div className="value">{price(compsResult.equityValuePerShare)}</div>
-          <div className="value-label">
-            {money(compsResult.averageMultiple)}× avg · applied to {money(terminalEbitda)} EBITDA
-          </div>
-          <UpsideBadge target={compsResult.equityValuePerShare} />
-        </article>
+      <p className="note" style={{ marginTop: 0 }}>
+        Sector: <b>{sector}</b> — methods that fit it are marked <span className="rec-badge">recommended</span>.
+      </p>
+      <section className="cards methods">
+        {methods.map((m) => (
+          <article key={m.id} className={`card ${m.recommended ? 'rec' : 'dim'}`}>
+            <h2>{m.label}{m.recommended && <span className="rec-badge">recommended</span>}</h2>
+            <div className="value">{price(m.perShare)}</div>
+            <div className="value-label">{m.note}</div>
+            <UpsideBadge target={m.perShare} />
+          </article>
+        ))}
       </section>
 
       <FootballField ranges={footballField.ranges} price={footballField.price} />

@@ -83,6 +83,11 @@ thead th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .badge { display: inline-block; margin-top: 8px; font-size: 12px; padding: 2px 8px; border-radius: 999px;
   border: 1px solid var(--line); }
 .badge.pos { color: var(--good); } .badge.neg { color: var(--bad); }
+.card.rec { border-color: var(--accent); }
+.card.dim { opacity: 0.6; }
+.card h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rec-badge { font-size: 10px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 999px; padding: 1px 7px; text-transform: uppercase; letter-spacing: .03em; }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
 .panel h3 { margin: 0 0 10px; font-size: 14px; }

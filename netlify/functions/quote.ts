@@ -35,7 +35,7 @@ export default async (req: Request): Promise<Response> => {
     }
     const quote = (await quoteRes.json()) as { c?: number; pc?: number };
     const profile = (await profileRes.json()) as {
-      name?: string; ticker?: string; shareOutstanding?: number; currency?: string;
+      name?: string; ticker?: string; shareOutstanding?: number; currency?: string; finnhubIndustry?: string;
     };
 
     // Finnhub reports shareOutstanding in millions.
@@ -53,6 +53,7 @@ export default async (req: Request): Promise<Response> => {
       previousClose: quote.pc ?? null,
       sharesOutstanding,
       currency: profile.currency ?? null,
+      industry: profile.finnhubIndustry ?? null,
     });
   } catch {
     return json({ error: 'Failed to reach market-data provider.' }, 502);

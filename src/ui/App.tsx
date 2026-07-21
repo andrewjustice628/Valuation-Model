@@ -20,7 +20,7 @@ function ModelBar() {
   const company = useModel((s) => s.company);
   const assumptions = useModel((s) => s.assumptions);
   const historicals = useModel((s) => s.historicals);
-  const { statements, dcf, compsResult } = useComputed();
+  const { statements, dcf, compsResult, methods } = useComputed();
   const [name, setName] = useState(currentName);
   const [selId, setSelId] = useState('');
   useEffect(() => setName(currentName), [currentName]);
@@ -28,7 +28,7 @@ function ModelBar() {
   const fileBase = () => (name || company.ticker || 'valuation').replace(/\s+/g, '-');
   const doExcel = async () => {
     const XLSX = await import('xlsx');
-    const sheets = buildSheets({ company, assumptions, statements, historicals, dcf, compsResult });
+    const sheets = buildSheets({ company, assumptions, statements, historicals, dcf, compsResult, methods });
     const wb = XLSX.utils.book_new();
     for (const sh of sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sh.rows), sh.name);
     XLSX.writeFile(wb, `${fileBase()}.xlsx`);
@@ -110,6 +110,15 @@ function CompanyHeader() {
         <label className="stack">
           <span>Unit</span>
           <input value={company.unit} onChange={(e) => setCompany({ unit: e.target.value })} />
+        </label>
+        <label className="stack">
+          <span>Sector</span>
+          <select value={company.sector} onChange={(e) => setCompany({ sector: e.target.value as typeof company.sector })}>
+            <option value="corporate">Corporate</option>
+            <option value="financial">Financial (bank/insurer)</option>
+            <option value="reit">REIT / Real estate</option>
+            <option value="utility">Utility</option>
+          </select>
         </label>
       </div>
       <div className="row">

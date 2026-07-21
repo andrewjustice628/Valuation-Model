@@ -11,12 +11,32 @@ import type { HistoricalYear } from '../lib/historicals';
 import type { BaseYear, ForecastAssumptions } from '../engine/statements';
 import type { NetDebtBridge, WaccAssumptions } from '../engine/types';
 
+export type Sector = 'corporate' | 'financial' | 'reit' | 'utility';
+
 export interface CompanyInfo {
   ticker: string;
   name: string;
   unit: string;
   sharePrice: number;
   sharesOutstanding: number;
+  sector: Sector;
+}
+
+/** Which valuation methods fit each sector (recommended, not exclusive). */
+export const SECTOR_METHODS: Record<Sector, string[]> = {
+  corporate: ['dcf', 'comps'],
+  financial: ['ddm', 'pb', 'comps'],
+  reit: ['ddm', 'comps'],
+  utility: ['ddm', 'dcf'],
+};
+
+/** Map a data-provider industry string to a sector. */
+export function sectorFromIndustry(industry: string | null | undefined): Sector {
+  const s = (industry ?? '').toLowerCase();
+  if (/bank|insurance|financ|capital markets|asset management/.test(s)) return 'financial';
+  if (/reit|real estate/.test(s)) return 'reit';
+  if (/utilit/.test(s)) return 'utility';
+  return 'corporate';
 }
 
 export interface Peer {
@@ -183,7 +203,7 @@ export interface ModelSnapshot {
 
 function initialModel(): ModelSnapshot {
   return {
-    company: { ticker: 'AAPL', name: 'Example Corp', unit: 'Thousands', sharePrice: 0, sharesOutstanding: 1000 },
+    company: { ticker: 'AAPL', name: 'Example Corp', unit: 'Thousands', sharePrice: 0, sharesOutstanding: 1000, sector: 'corporate' },
     base: { ...defaultBase },
     assumptions: YEARS.map((y, i) => defaultAssumption(y, i)),
     wacc: { ...defaultWacc },
@@ -354,6 +374,7 @@ export const useModel = create<ModelState>((set, get) => ({
           name: q.name || s.company.name,
           sharePrice: q.price ?? q.previousClose ?? s.company.sharePrice,
           sharesOutstanding: q.sharesOutstanding ?? s.company.sharesOutstanding,
+          sector: q.industry ? sectorFromIndustry(q.industry) : s.company.sector,
         },
       }));
     } catch (e) {
