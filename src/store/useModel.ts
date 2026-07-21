@@ -64,6 +64,8 @@ export interface FinancialsConfig {
   bookValuePerShare: number;
   roe: number;
   payoutRatio: number;
+  highGrowthYears: number;
+  terminalGrowth: number;
 }
 
 type FetchStatus = 'idle' | 'loading' | 'ok' | 'error';
@@ -222,7 +224,7 @@ function initialModel(): ModelSnapshot {
       peers: [{ ticker: '', multiple: null }, { ticker: '', multiple: null }, { ticker: '', multiple: null }],
       companyMetricOverride: null,
     },
-    financials: { bookValuePerShare: 50, roe: 0.12, payoutRatio: 0.4 },
+    financials: { bookValuePerShare: 50, roe: 0.12, payoutRatio: 0.4, highGrowthYears: 10, terminalGrowth: 0.025 },
     labels: {},
     historicals: [],
     historicalBase: [],

@@ -299,8 +299,9 @@ function FinancialsSection() {
     <details open>
       <summary>Financials (banks / insurers)</summary>
       <p className="note">
-        For {sector === 'reit' ? 'REITs' : 'financials'}, the Dividend Discount and Justified P/B methods use these
-        inputs directly instead of the corporate forecast. Cost of equity comes from your CAPM inputs (WACC section).
+        For {sector === 'reit' ? 'REITs' : 'financials'}, the Dividend Discount and P/B methods use these inputs directly
+        (two-stage: book &amp; dividends compound at the sustainable rate for the high-growth years, then fade to terminal).
+        Cost of equity comes from your CAPM inputs (WACC section).
       </p>
       <div className="grid">
         <div className="cell">
@@ -316,7 +317,15 @@ function FinancialsSection() {
           <NumberInput value={financials.payoutRatio} percent onCommit={(n) => setFinancials({ payoutRatio: n })} />
         </div>
         <div className="cell">
-          <span className="field-label"><span className="lbl">Implied sustainable growth</span></span>
+          <FieldLabel fieldId="fin.years" label="High-growth years" />
+          <NumberInput value={financials.highGrowthYears} onCommit={(n) => setFinancials({ highGrowthYears: n })} />
+        </div>
+        <div className="cell">
+          <FieldLabel fieldId="fin.tg" label="Terminal growth" />
+          <NumberInput value={financials.terminalGrowth} percent onCommit={(n) => setFinancials({ terminalGrowth: n })} />
+        </div>
+        <div className="cell">
+          <span className="field-label"><span className="lbl">Sustainable growth (ROE×retention)</span></span>
           <span className="num"><input readOnly value={`${(g * 100).toFixed(1)}%`} /></span>
         </div>
       </div>

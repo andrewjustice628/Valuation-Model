@@ -12,7 +12,7 @@ import { sensitivityMatrix } from '../engine/sensitivity';
 import { impliedRevenueGrowth } from '../engine/reverseDcf';
 import { runDdm } from '../engine/ddm';
 import { runFcfe } from '../engine/fcfe';
-import { runJustifiedPb } from '../engine/justifiedPb';
+import { runFinancialValuation } from '../engine/financialValuation';
 import { SECTOR_METHODS } from './useModel';
 
 export function useComputed() {
@@ -83,22 +83,23 @@ export function useComputed() {
       })),
       costOfEquity, stub: dcfCfg.stub, terminalGrowth: dcfCfg.longTermGrowth, sharesOutstanding: shares,
     });
-    // Financials (banks/insurers): value from dedicated inputs — sustainable
-    // growth g = ROE × (1 − payout); DDM and justified P/B both flow from these.
+    // Financials (banks/insurers): two-stage model from dedicated inputs —
+    // book/dividends compound at ROE×(1−payout) for a high-growth stage, then
+    // fade to a terminal rate. Removes the single-stage g < cost-of-equity limit.
     const usesFinancials = sector === 'financial' || sector === 'reit';
-    const gFin = financials.roe * (1 - financials.payoutRatio);
-    const pb = runJustifiedPb({
-      bookEquity: financials.bookValuePerShare * shares,
-      roe: financials.roe, costOfEquity, growth: gFin, sharesOutstanding: shares,
+    const fin = runFinancialValuation({
+      bookValuePerShare: financials.bookValuePerShare, roe: financials.roe, payoutRatio: financials.payoutRatio,
+      highGrowthYears: financials.highGrowthYears, terminalGrowth: financials.terminalGrowth, costOfEquity,
     });
-    const eps0 = financials.roe * financials.bookValuePerShare;
-    const finDdmPerShare = costOfEquity > gFin ? (eps0 * (1 + gFin) * financials.payoutRatio) / (costOfEquity - gFin) : NaN;
-    const ddmPerShare = usesFinancials ? finDdmPerShare : ddm.perShare;
-    const ddmNote = usesFinancials ? 'Gordon DDM from ROE/payout' : 'Forecast dividends @ cost of equity';
+    const ddmPerShare = usesFinancials ? fin.ddmPerShare : ddm.perShare;
+    const ddmNote = usesFinancials
+      ? `Two-stage: ${(fin.gHigh * 100).toFixed(1)}% for ${financials.highGrowthYears}y → ${(financials.terminalGrowth * 100).toFixed(1)}%`
+      : 'Forecast dividends @ cost of equity';
+    const pbPerShare = usesFinancials ? fin.pbPerShare : NaN;
 
     const financialsWarning =
-      usesFinancials && !(costOfEquity > gFin)
-        ? `Sustainable growth ${(gFin * 100).toFixed(1)}% is at or above the cost of equity ${(costOfEquity * 100).toFixed(1)}% — the single-stage DDM / P&B can't value this. Use a lower normalized ROE, a higher payout, or set the WACC/CAPM inputs to the bank's own (a higher beta raises cost of equity).`
+      usesFinancials && !fin.valid
+        ? `Cost of equity ${(costOfEquity * 100).toFixed(1)}% is at or below the terminal growth ${(financials.terminalGrowth * 100).toFixed(1)}% — lower the terminal growth or set the bank's WACC/CAPM inputs (a higher beta raises cost of equity).`
         : null;
 
     const rec = new Set(SECTOR_METHODS[sector]);
@@ -107,7 +108,7 @@ export function useComputed() {
       { id: 'comps', label: 'Comparable Companies', perShare: compsResult.equityValuePerShare, note: comps.multipleName, recommended: rec.has('comps') },
       { id: 'ddm', label: 'Dividend Discount', perShare: ddmPerShare, note: ddmNote, recommended: rec.has('ddm') },
       { id: 'fcfe', label: 'FCFE (levered)', perShare: fcfe.perShare, note: 'Equity cash flow @ cost of equity', recommended: rec.has('fcfe') },
-      { id: 'pb', label: 'Justified P/B (ROE)', perShare: pb.perShare, note: `Implied P/B ${Number.isFinite(pb.justifiedPb) ? `${pb.justifiedPb.toFixed(2)}×` : '—'}`, recommended: rec.has('pb') },
+      { id: 'pb', label: 'Justified P/B (steady-state)', perShare: pbPerShare, note: `Implied P/B ${Number.isFinite(fin.justifiedPb) ? `${fin.justifiedPb.toFixed(2)}×` : '—'}`, recommended: rec.has('pb') },
     ];
 
     // Football field — DCF & comps ranges, plus recommended point-methods.
