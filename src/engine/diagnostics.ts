@@ -53,6 +53,14 @@ export function runDiagnostics({ dcf, statements, longTermGrowth, sharePrice }: 
     f.push({ level: 'warn', title: 'Equity value is negative', detail: 'Enterprise value is below net debt. Verify debt/cash in the base year and the forecast cash flows.' });
   }
 
+  if (wacc > 0 && wacc < 0.07) {
+    f.push({
+      level: 'warn',
+      title: `WACC ${pct(wacc)} is low`,
+      detail: 'A low discount rate inflates the value, especially when the terminal value dominates. If beta was auto-fetched, verify it — a low beta (common for defensive names) pulls WACC down sharply.',
+    });
+  }
+
   if (longTermGrowth > 0.05) {
     f.push({ level: 'warn', title: `Terminal growth ${pct(longTermGrowth)} looks high`, detail: 'A perpetual growth rate above ~long-run GDP (2–4%) implies the company outgrows the economy forever.' });
   }
