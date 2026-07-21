@@ -47,13 +47,36 @@ function UpsideBadge({ target }: { target: number }) {
   );
 }
 
+function Diagnostics({ findings }: { findings: { level: 'error' | 'warn' | 'info'; title: string; detail: string }[] }) {
+  if (findings.length === 0) {
+    return <section className="panel diag"><p className="diag-ok">✓ No issues flagged — inputs look sane.</p></section>;
+  }
+  const icon = { error: '⛔', warn: '⚠️', info: 'ℹ️' } as const;
+  const order = { error: 0, warn: 1, info: 2 } as const;
+  const sorted = [...findings].sort((a, b) => order[a.level] - order[b.level]);
+  return (
+    <section className="panel diag">
+      <h3>Diagnostics</h3>
+      <ul className="diag-list">
+        {sorted.map((f, i) => (
+          <li key={i} className={`diag-item ${f.level}`}>
+            <span className="diag-ico">{icon[f.level]}</span>
+            <span><b>{f.title}.</b> {f.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function Results() {
-  const { statements, dcf, compsResult, terminalEbitda } = useComputed();
+  const { statements, dcf, compsResult, terminalEbitda, diagnostics } = useComputed();
   const historicals = useModel((s) => s.historicals);
   const [tab, setTab] = useState<'is' | 'bs' | 'cf'>('is');
 
   return (
     <div className="results">
+      <Diagnostics findings={diagnostics} />
       <section className="cards">
         <article className="card">
           <h2>Discounted Cash Flow</h2>

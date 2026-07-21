@@ -98,6 +98,18 @@ th.fdiv, td.fdiv { border-left: 2px solid var(--accent); }
 .base-table td, .base-table th { padding: 4px 8px; }
 .base-table .num input { width: 130px; }
 .assum td.manual input { color: var(--accent); border-color: var(--accent); }
+
+.diag { padding: 12px 16px; }
+.diag h3 { margin: 0 0 8px; }
+.diag-ok { margin: 0; color: var(--good); font-size: 13px; }
+.diag-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.diag-item { display: flex; gap: 8px; font-size: 12.5px; line-height: 1.45; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel-2); }
+.diag-item .diag-ico { flex: none; }
+.diag-item.error { border-color: var(--bad); }
+.diag-item.error b { color: var(--bad); }
+.diag-item.warn b { color: #e5b567; }
+.diag-item.info { color: var(--muted); }
 .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
 .tabs button.on { background: var(--accent); color: #05121f; border-color: var(--accent); font-weight: 600; }
 .output { position: sticky; top: 16px; }

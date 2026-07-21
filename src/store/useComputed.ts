@@ -7,6 +7,7 @@ import { useModel } from './useModel';
 import { buildStatements } from '../engine/statements';
 import { runDcf } from '../engine/dcf';
 import { runComps } from '../engine/comps';
+import { runDiagnostics } from '../engine/diagnostics';
 
 export function useComputed() {
   const base = useModel((s) => s.base);
@@ -16,6 +17,7 @@ export function useComputed() {
   const dcfCfg = useModel((s) => s.dcf);
   const comps = useModel((s) => s.comps);
   const shares = useModel((s) => s.company.sharesOutstanding);
+  const sharePrice = useModel((s) => s.company.sharePrice);
 
   return useMemo(() => {
     const statements = buildStatements(base, assumptions);
@@ -48,6 +50,7 @@ export function useComputed() {
       netDebt: dcf.netDebt,
       sharesOutstanding: shares,
     });
-    return { statements, dcf, compsResult, terminalEbitda, companyMetric };
-  }, [base, assumptions, wacc, bridge, dcfCfg, comps, shares]);
+    const diagnostics = runDiagnostics({ dcf, statements, longTermGrowth: dcfCfg.longTermGrowth, sharePrice });
+    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics };
+  }, [base, assumptions, wacc, bridge, dcfCfg, comps, shares, sharePrice]);
 }
