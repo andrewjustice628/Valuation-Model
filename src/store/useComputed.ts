@@ -25,6 +25,7 @@ export function useComputed() {
   const shares = useModel((s) => s.company.sharesOutstanding);
   const sharePrice = useModel((s) => s.company.sharePrice);
   const sector = useModel((s) => s.company.sector);
+  const financials = useModel((s) => s.financials);
 
   return useMemo(() => {
     const statements = buildStatements(base, assumptions);
@@ -82,15 +83,24 @@ export function useComputed() {
       })),
       costOfEquity, stub: dcfCfg.stub, terminalGrowth: dcfCfg.longTermGrowth, sharesOutstanding: shares,
     });
-    const bookEquity = base.retainedEarnings + base.otherComprehensiveIncome + base.commonStock;
-    const roe = bookEquity !== 0 ? statements.years[0].incomeStatement.netIncome / bookEquity : NaN;
-    const pb = runJustifiedPb({ bookEquity, roe, costOfEquity, growth: dcfCfg.longTermGrowth, sharesOutstanding: shares });
+    // Financials (banks/insurers): value from dedicated inputs — sustainable
+    // growth g = ROE × (1 − payout); DDM and justified P/B both flow from these.
+    const usesFinancials = sector === 'financial' || sector === 'reit';
+    const gFin = financials.roe * (1 - financials.payoutRatio);
+    const pb = runJustifiedPb({
+      bookEquity: financials.bookValuePerShare * shares,
+      roe: financials.roe, costOfEquity, growth: gFin, sharesOutstanding: shares,
+    });
+    const eps0 = financials.roe * financials.bookValuePerShare;
+    const finDdmPerShare = costOfEquity > gFin ? (eps0 * (1 + gFin) * financials.payoutRatio) / (costOfEquity - gFin) : NaN;
+    const ddmPerShare = usesFinancials ? finDdmPerShare : ddm.perShare;
+    const ddmNote = usesFinancials ? 'Gordon DDM from ROE/payout' : 'Forecast dividends @ cost of equity';
 
     const rec = new Set(SECTOR_METHODS[sector]);
     const methods = [
       { id: 'dcf', label: 'Discounted Cash Flow', perShare: dcf.equityValuePerShare, note: 'Unlevered FCF → enterprise value', recommended: rec.has('dcf') },
       { id: 'comps', label: 'Comparable Companies', perShare: compsResult.equityValuePerShare, note: comps.multipleName, recommended: rec.has('comps') },
-      { id: 'ddm', label: 'Dividend Discount', perShare: ddm.perShare, note: 'Dividends @ cost of equity', recommended: rec.has('ddm') },
+      { id: 'ddm', label: 'Dividend Discount', perShare: ddmPerShare, note: ddmNote, recommended: rec.has('ddm') },
       { id: 'fcfe', label: 'FCFE (levered)', perShare: fcfe.perShare, note: 'Equity cash flow @ cost of equity', recommended: rec.has('fcfe') },
       { id: 'pb', label: 'Justified P/B (ROE)', perShare: pb.perShare, note: `Implied P/B ${Number.isFinite(pb.justifiedPb) ? `${pb.justifiedPb.toFixed(2)}×` : '—'}`, recommended: rec.has('pb') },
     ];
@@ -113,5 +123,5 @@ export function useComputed() {
     const footballField = { ranges, price: sharePrice };
 
     return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector };
-  }, [base, assumptions, wacc, bridge, dcfCfg, comps, shares, sharePrice, sector]);
+  }, [base, assumptions, wacc, bridge, dcfCfg, comps, shares, sharePrice, sector, financials]);
 }

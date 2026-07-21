@@ -289,6 +289,41 @@ function WaccSection() {
   );
 }
 
+function FinancialsSection() {
+  const sector = useModel((s) => s.company.sector);
+  const financials = useModel((s) => s.financials);
+  const setFinancials = useModel((s) => s.setFinancials);
+  if (sector !== 'financial' && sector !== 'reit') return null;
+  const g = financials.roe * (1 - financials.payoutRatio);
+  return (
+    <details open>
+      <summary>Financials (banks / insurers)</summary>
+      <p className="note">
+        For {sector === 'reit' ? 'REITs' : 'financials'}, the Dividend Discount and Justified P/B methods use these
+        inputs directly instead of the corporate forecast. Cost of equity comes from your CAPM inputs (WACC section).
+      </p>
+      <div className="grid">
+        <div className="cell">
+          <FieldLabel fieldId="fin.bvps" label="Book value / share" aka="Tangible book preferred for banks" />
+          <NumberInput value={financials.bookValuePerShare} onCommit={(n) => setFinancials({ bookValuePerShare: n })} />
+        </div>
+        <div className="cell">
+          <FieldLabel fieldId="fin.roe" label="Sustainable ROE" />
+          <NumberInput value={financials.roe} percent onCommit={(n) => setFinancials({ roe: n })} />
+        </div>
+        <div className="cell">
+          <FieldLabel fieldId="fin.payout" label="Payout ratio" />
+          <NumberInput value={financials.payoutRatio} percent onCommit={(n) => setFinancials({ payoutRatio: n })} />
+        </div>
+        <div className="cell">
+          <span className="field-label"><span className="lbl">Implied sustainable growth</span></span>
+          <span className="num"><input readOnly value={`${(g * 100).toFixed(1)}%`} /></span>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function BridgeSection() {
   const bridge = useModel((s) => s.bridge);
   const setBridge = useModel((s) => s.setBridge);
@@ -375,6 +410,7 @@ export function App() {
           <BaseSection />
           <AssumptionsSection />
           <WaccSection />
+          <FinancialsSection />
           <CompsSection />
           <BridgeSection />
         </div>

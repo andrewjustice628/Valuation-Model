@@ -59,6 +59,13 @@ export interface DcfConfig {
   exitMultiple: number;
 }
 
+/** Dedicated inputs for valuing financials (banks/insurers) — drive DDM & P/B. */
+export interface FinancialsConfig {
+  bookValuePerShare: number;
+  roe: number;
+  payoutRatio: number;
+}
+
 type FetchStatus = 'idle' | 'loading' | 'ok' | 'error';
 
 // Latest completed fiscal year (dynamic) → the model always spans the same
@@ -195,6 +202,7 @@ export interface ModelSnapshot {
   bridge: NetDebtBridge;
   dcf: DcfConfig;
   comps: CompsConfig;
+  financials: FinancialsConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
   historicalBase: Array<Record<string, number>>;
@@ -214,6 +222,7 @@ function initialModel(): ModelSnapshot {
       peers: [{ ticker: '', multiple: null }, { ticker: '', multiple: null }, { ticker: '', multiple: null }],
       companyMetricOverride: null,
     },
+    financials: { bookValuePerShare: 50, roe: 0.12, payoutRatio: 0.4 },
     labels: {},
     historicals: [],
     historicalBase: [],
@@ -231,6 +240,7 @@ export interface ModelState {
   bridge: NetDebtBridge;
   dcf: DcfConfig;
   comps: CompsConfig;
+  financials: FinancialsConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
   historicalBase: Array<Record<string, number>>;
@@ -257,6 +267,7 @@ export interface ModelState {
   setBridge: (field: keyof NetDebtBridge, value: number) => void;
   setDcf: (patch: Partial<DcfConfig>) => void;
   setComps: (patch: Partial<CompsConfig>) => void;
+  setFinancials: (patch: Partial<FinancialsConfig>) => void;
   setPeer: (index: number, patch: Partial<Peer>) => void;
   addPeer: () => void;
   removePeer: (index: number) => void;
@@ -278,7 +289,7 @@ export const useModel = create<ModelState>((set, get) => ({
     const s = get();
     return {
       company: s.company, base: s.base, assumptions: s.assumptions, wacc: s.wacc, bridge: s.bridge,
-      dcf: s.dcf, comps: s.comps, labels: s.labels, historicals: s.historicals,
+      dcf: s.dcf, comps: s.comps, financials: s.financials, labels: s.labels, historicals: s.historicals,
       historicalBase: s.historicalBase, manualOverrides: s.manualOverrides,
     };
   },
@@ -335,6 +346,7 @@ export const useModel = create<ModelState>((set, get) => ({
   setBridge: (field, value) => set((s) => ({ bridge: { ...s.bridge, [field]: value } })),
   setDcf: (patch) => set((s) => ({ dcf: { ...s.dcf, ...patch } })),
   setComps: (patch) => set((s) => ({ comps: { ...s.comps, ...patch } })),
+  setFinancials: (patch) => set((s) => ({ financials: { ...s.financials, ...patch } })),
   setPeer: (index, patch) =>
     set((s) => ({ comps: { ...s.comps, peers: s.comps.peers.map((p, i) => (i === index ? { ...p, ...patch } : p)) } })),
   addPeer: () => set((s) => ({ comps: { ...s.comps, peers: [...s.comps.peers, { ticker: '', multiple: null }] } })),
