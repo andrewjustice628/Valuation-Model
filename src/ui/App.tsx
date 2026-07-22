@@ -245,9 +245,16 @@ function WaccSection() {
   const setWacc = useModel((s) => s.setWacc);
   const dcf = useModel((s) => s.dcf);
   const setDcf = useModel((s) => s.setDcf);
+  const betaFetch = useModel((s) => s.betaFetch);
   return (
     <details open>
       <summary>WACC & DCF settings</summary>
+      {betaFetch && (
+        <p className="note">
+          Fetched raw β {betaFetch.raw.toFixed(2)} → Blume-adjusted β <b>{betaFetch.adjusted.toFixed(2)}</b> (⅔×raw + ⅓×1),
+          used in CAPM. Edit Beta to override.
+        </p>
+      )}
       <div className="grid">
         {WACC_FIELDS.map((f) => (
           <div className="cell" key={f.id}>

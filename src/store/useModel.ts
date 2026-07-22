@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { activeProvider } from '../lib/marketData';
 import { RAMP_SEED_FIELDS, revenueGrowthFromHistory, effectiveTaxRate } from '../lib/seed';
+import { blumeAdjustedBeta } from '../engine/finance';
 import { loadAll, saveAll, type SavedModel } from '../lib/persistence';
 import type { HistoricalYear } from '../lib/historicals';
 import type { BaseYear, ForecastAssumptions } from '../engine/statements';
@@ -248,7 +249,11 @@ function initialModel(): ModelSnapshot {
   };
 }
 
-const TRANSIENT = { quoteStatus: 'idle' as FetchStatus, quoteError: null, financialsStatus: 'idle' as FetchStatus, financialsMessage: null };
+const TRANSIENT = {
+  quoteStatus: 'idle' as FetchStatus, quoteError: null,
+  financialsStatus: 'idle' as FetchStatus, financialsMessage: null,
+  betaFetch: null as { raw: number; adjusted: number } | null,
+};
 
 export interface ModelState {
   company: CompanyInfo;
@@ -269,6 +274,8 @@ export interface ModelState {
   quoteError: string | null;
   financialsStatus: FetchStatus;
   financialsMessage: string | null;
+  /** Raw vs Blume-adjusted beta from the last quote fetch (for display). */
+  betaFetch: { raw: number; adjusted: number } | null;
   savedModels: SavedModel<ModelSnapshot>[];
   currentName: string;
 
@@ -400,6 +407,8 @@ export const useModel = create<ModelState>((set, get) => ({
     set({ quoteStatus: 'loading', quoteError: null });
     try {
       const q = await activeProvider.fetchQuote(ticker);
+      const rawBeta = typeof q.beta === 'number' && Number.isFinite(q.beta) ? q.beta : null;
+      const adjustedBeta = rawBeta != null ? blumeAdjustedBeta(rawBeta) : null;
       set((s) => ({
         quoteStatus: 'ok',
         company: {
@@ -409,8 +418,9 @@ export const useModel = create<ModelState>((set, get) => ({
           sharesOutstanding: q.sharesOutstanding ?? s.company.sharesOutstanding,
           sector: q.industry ? sectorFromIndustry(q.industry) : s.company.sector,
         },
-        // Live beta feeds the CAPM cost of equity; other WACC inputs stay manual.
-        wacc: typeof q.beta === 'number' && Number.isFinite(q.beta) ? { ...s.wacc, beta: q.beta } : s.wacc,
+        // Fetched beta is a raw regression beta; use the Blume-adjusted value in CAPM.
+        wacc: adjustedBeta != null ? { ...s.wacc, beta: adjustedBeta } : s.wacc,
+        betaFetch: rawBeta != null && adjustedBeta != null ? { raw: rawBeta, adjusted: adjustedBeta } : s.betaFetch,
       }));
     } catch (e) {
       set({ quoteStatus: 'error', quoteError: e instanceof Error ? e.message : 'Fetch failed.' });

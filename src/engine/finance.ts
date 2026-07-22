@@ -22,6 +22,16 @@ export function average(xs: number[]): number {
   return xs.reduce((a, b) => a + b, 0) / xs.length;
 }
 
+/**
+ * Blume-adjusted beta: nudges a raw regression beta toward the market's 1.0,
+ * reflecting that betas mean-revert over time. adjusted = ⅔·raw + ⅓·1.0
+ * (Bloomberg's default). Preferred over a raw single-stock beta for forward-
+ * looking discounting.
+ */
+export function blumeAdjustedBeta(rawBeta: number): number {
+  return (2 / 3) * rawBeta + 1 / 3;
+}
+
 /** Round to `dp` decimal places (display only — never in the compute chain). */
 export function round(x: number, dp = 2): number {
   const f = Math.pow(10, dp);
