@@ -267,9 +267,9 @@ function WaccSection() {
             <option value="bottomUp">Bottom-up (industry)</option>
           </select>
         </label>
-        {betaConfig.method === 'bottomUp' && Number.isFinite(bu.releveredBeta) && (
-          <span className="ok">Asset β {bu.assetBeta.toFixed(2)} → relevered β <b>{bu.releveredBeta.toFixed(2)}</b> (used in CAPM, overrides Beta field)</span>
-        )}
+        {betaConfig.method === 'bottomUp' && (Number.isFinite(bu.releveredBeta)
+          ? <span className="ok">Asset β {bu.assetBeta.toFixed(2)} → relevered β <b>{bu.releveredBeta.toFixed(2)}</b> from {bu.count} peer{bu.count === 1 ? '' : 's'} (used in CAPM, overrides Beta field)</span>
+          : <span className="err">Enter at least one peer with a levered β and D/E (peers missing D/E are skipped).</span>)}
       </div>
       {betaConfig.method === 'bottomUp' && (
         <div className="assum-group">
