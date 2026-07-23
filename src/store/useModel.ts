@@ -82,6 +82,8 @@ export interface BetaConfig {
   method: 'fetched' | 'bottomUp';
   peers: BetaPeer[];
   targetDE: number;
+  /** When true, targetDE is derived from the base-year debt & equity market cap. */
+  targetDEAuto: boolean;
 }
 
 /** Dedicated inputs for valuing financials (banks/insurers) — drive DDM & P/B. */
@@ -260,6 +262,7 @@ function initialModel(): ModelSnapshot {
       method: 'fetched',
       peers: [{ ticker: '', leveredBeta: null, deRatio: null }, { ticker: '', leveredBeta: null, deRatio: null }, { ticker: '', leveredBeta: null, deRatio: null }],
       targetDE: 0.5,
+      targetDEAuto: true,
     },
     labels: {},
     historicals: [],

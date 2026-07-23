@@ -30,3 +30,13 @@ export function bottomUpBeta(peers: BetaPeerInput[], targetDE: number, taxRate: 
   const releveredBeta = assetBeta * (1 + (1 - t) * Math.max(0, targetDE));
   return { assetBeta, releveredBeta, count: valid.length };
 }
+
+/**
+ * The target company's own D/E for relevering, from total debt and the market
+ * value of equity (price × shares). Returns NaN when equity value is unknown,
+ * so callers can fall back to a manual entry.
+ */
+export function targetDebtEquity(debt: number, marketEquity: number): number {
+  if (!Number.isFinite(marketEquity) || marketEquity <= 0) return NaN;
+  return Math.max(0, debt) / marketEquity;
+}

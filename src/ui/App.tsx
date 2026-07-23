@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useModel, AUTO_FIELDS } from '../store/useModel';
 import { useComputed } from '../store/useComputed';
 import { buildSheets } from '../lib/exportWorkbook';
-import { bottomUpBeta } from '../engine/bottomUpBeta';
+import { bottomUpBeta, targetDebtEquity } from '../engine/bottomUpBeta';
 import { NumberInput, FieldLabel } from './fields';
 import { Results } from './Results';
 import { ASSUMPTION_GROUPS, BASE_FIELDS, BRIDGE_FIELDS, WACC_FIELDS } from './catalog';
@@ -250,11 +250,17 @@ function WaccSection() {
   const betaConfig = useModel((s) => s.betaConfig);
   const setBetaConfig = useModel((s) => s.setBetaConfig);
   const fetchBetaPeer = useModel((s) => s.fetchBetaPeer);
+  const base = useModel((s) => s.base);
+  const sharePrice = useModel((s) => s.company.sharePrice);
+  const shares = useModel((s) => s.company.sharesOutstanding);
   const setBetaPeer = (i: number, patch: Partial<{ ticker: string; leveredBeta: number | null; deRatio: number | null }>) =>
     setBetaConfig({ peers: betaConfig.peers.map((p, k) => (k === i ? { ...p, ...patch } : p)) });
+  const autoTargetDE = targetDebtEquity(base.longTermDebt + base.commercialPaper, sharePrice * shares);
+  const usingAutoDE = betaConfig.targetDEAuto && Number.isFinite(autoTargetDE);
+  const effectiveTargetDE = usingAutoDE ? autoTargetDE : betaConfig.targetDE;
   const bu = bottomUpBeta(
     betaConfig.peers.map((p) => ({ leveredBeta: p.leveredBeta ?? NaN, deRatio: p.deRatio ?? NaN })),
-    betaConfig.targetDE, wacc.taxRate,
+    effectiveTargetDE, wacc.taxRate,
   );
   return (
     <details open>
@@ -287,10 +293,13 @@ function WaccSection() {
             </tbody>
           </table>
           <button className="add" onClick={() => setBetaConfig({ peers: [...betaConfig.peers, { ticker: '', leveredBeta: null, deRatio: null }] })}>+ Add peer</button>
-          <div className="row" style={{ marginTop: 8 }}>
-            <label className="stack"><span>Target D/E (for relevering)</span><NumberInput value={betaConfig.targetDE} onCommit={(n) => setBetaConfig({ targetDE: n })} width={90} /></label>
+          <div className="row" style={{ marginTop: 8, alignItems: 'flex-end', gap: 8 }}>
+            <label className="stack"><span>Target D/E (for relevering)</span><NumberInput value={effectiveTargetDE} onCommit={(n) => setBetaConfig({ targetDE: n, targetDEAuto: false })} width={90} /></label>
+            {usingAutoDE
+              ? <span className="note" style={{ marginBottom: 6 }}>auto from base debt ÷ equity mkt cap</span>
+              : <button className="mini" style={{ marginBottom: 4 }} title="Reset to auto (base debt ÷ equity market cap)" onClick={() => setBetaConfig({ targetDEAuto: true })}>↺ auto</button>}
           </div>
-          <p className="note">Peer betas &amp; D/E auto-fetch on ticker entry (D/E best-effort — verify). Unlevered by each peer's D/E and tax, averaged, relevered at your target D/E. This relevered beta replaces the fetched beta in CAPM.</p>
+          <p className="note">Peer betas &amp; D/E auto-fetch on ticker entry (D/E best-effort — verify). Unlevered by each peer's D/E and tax, averaged, relevered at your target D/E. Target D/E defaults to the company's own leverage (base-year debt ÷ equity market cap); edit to override. This relevered beta replaces the fetched beta in CAPM.</p>
         </div>
       )}
       {betaFetch && (

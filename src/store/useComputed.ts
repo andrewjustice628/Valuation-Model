@@ -13,7 +13,7 @@ import { impliedRevenueGrowth } from '../engine/reverseDcf';
 import { runDdm } from '../engine/ddm';
 import { runFcfe } from '../engine/fcfe';
 import { runFinancialValuation } from '../engine/financialValuation';
-import { bottomUpBeta } from '../engine/bottomUpBeta';
+import { bottomUpBeta, targetDebtEquity } from '../engine/bottomUpBeta';
 import { SECTOR_METHODS } from './useModel';
 
 export function useComputed() {
@@ -34,9 +34,13 @@ export function useComputed() {
     const statements = buildStatements(base, assumptions);
 
     // Effective beta: bottom-up industry beta when selected, else the fetched/manual beta.
+    // Target D/E for relevering derives from the company's own leverage (base-year
+    // debt over equity market cap) unless the user has overridden it.
+    const autoTargetDE = targetDebtEquity(base.longTermDebt + base.commercialPaper, sharePrice * shares);
+    const effectiveTargetDE = betaConfig.targetDEAuto && Number.isFinite(autoTargetDE) ? autoTargetDE : betaConfig.targetDE;
     const bu = bottomUpBeta(
       betaConfig.peers.map((p) => ({ leveredBeta: p.leveredBeta ?? NaN, deRatio: p.deRatio ?? NaN })),
-      betaConfig.targetDE,
+      effectiveTargetDE,
       wacc.taxRate,
     );
     const effectiveBeta = betaConfig.method === 'bottomUp' && Number.isFinite(bu.releveredBeta) ? bu.releveredBeta : wacc.beta;
@@ -155,7 +159,7 @@ export function useComputed() {
     }
     const footballField = { ranges, price: sharePrice };
 
-    const betaInfo = { method: betaConfig.method, assetBeta: bu.assetBeta, releveredBeta: bu.releveredBeta, count: bu.count, effectiveBeta };
+    const betaInfo = { method: betaConfig.method, assetBeta: bu.assetBeta, releveredBeta: bu.releveredBeta, count: bu.count, effectiveBeta, targetDE: effectiveTargetDE, targetDEAuto: betaConfig.targetDEAuto && Number.isFinite(autoTargetDE) };
     return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning, betaInfo };
   }, [base, assumptions, wacc, betaConfig, bridge, dcfCfg, comps, precedent, shares, sharePrice, sector, financials]);
 }

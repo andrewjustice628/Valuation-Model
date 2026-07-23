@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bottomUpBeta } from './bottomUpBeta';
+import { bottomUpBeta, targetDebtEquity } from './bottomUpBeta';
 
 describe('bottomUpBeta', () => {
   it('unlevers, averages, relevers', () => {
@@ -32,5 +32,18 @@ describe('bottomUpBeta', () => {
 
   it('NaN when no valid peers', () => {
     expect(bottomUpBeta([], 0.5, 0.21).releveredBeta).toBeNaN();
+  });
+});
+
+describe('targetDebtEquity', () => {
+  it('is debt over equity market cap', () => {
+    expect(targetDebtEquity(1000, 4000)).toBeCloseTo(0.25, 8);
+  });
+  it('floors negative debt at zero', () => {
+    expect(targetDebtEquity(-50, 1000)).toBe(0);
+  });
+  it('NaN when equity value is unknown or non-positive', () => {
+    expect(targetDebtEquity(1000, 0)).toBeNaN();
+    expect(targetDebtEquity(1000, NaN)).toBeNaN();
   });
 });
