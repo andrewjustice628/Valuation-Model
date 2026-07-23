@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useModel, AUTO_FIELDS } from '../store/useModel';
 import { useComputed } from '../store/useComputed';
 import { buildSheets } from '../lib/exportWorkbook';
+import { bottomUpBeta } from '../engine/bottomUpBeta';
 import { NumberInput, FieldLabel } from './fields';
 import { Results } from './Results';
 import { ASSUMPTION_GROUPS, BASE_FIELDS, BRIDGE_FIELDS, WACC_FIELDS } from './catalog';
@@ -246,9 +247,52 @@ function WaccSection() {
   const dcf = useModel((s) => s.dcf);
   const setDcf = useModel((s) => s.setDcf);
   const betaFetch = useModel((s) => s.betaFetch);
+  const betaConfig = useModel((s) => s.betaConfig);
+  const setBetaConfig = useModel((s) => s.setBetaConfig);
+  const fetchBetaPeer = useModel((s) => s.fetchBetaPeer);
+  const setBetaPeer = (i: number, patch: Partial<{ ticker: string; leveredBeta: number | null; deRatio: number | null }>) =>
+    setBetaConfig({ peers: betaConfig.peers.map((p, k) => (k === i ? { ...p, ...patch } : p)) });
+  const bu = bottomUpBeta(
+    betaConfig.peers.map((p) => ({ leveredBeta: p.leveredBeta ?? NaN, deRatio: p.deRatio ?? NaN })),
+    betaConfig.targetDE, wacc.taxRate,
+  );
   return (
     <details open>
       <summary>WACC & DCF settings</summary>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <label className="stack">
+          <span>Beta source</span>
+          <select value={betaConfig.method} onChange={(e) => setBetaConfig({ method: e.target.value as 'fetched' | 'bottomUp' })}>
+            <option value="fetched">Fetched (Blume-adjusted)</option>
+            <option value="bottomUp">Bottom-up (industry)</option>
+          </select>
+        </label>
+        {betaConfig.method === 'bottomUp' && Number.isFinite(bu.releveredBeta) && (
+          <span className="ok">Asset β {bu.assetBeta.toFixed(2)} → relevered β <b>{bu.releveredBeta.toFixed(2)}</b> (used in CAPM, overrides Beta field)</span>
+        )}
+      </div>
+      {betaConfig.method === 'bottomUp' && (
+        <div className="assum-group">
+          <table className="peers">
+            <thead><tr><th>Peer ticker</th><th>Levered β</th><th>D/E</th><th></th></tr></thead>
+            <tbody>
+              {betaConfig.peers.map((p, i) => (
+                <tr key={i}>
+                  <td><input className="ticker" value={p.ticker} placeholder="e.g. MCD" onChange={(e) => setBetaPeer(i, { ticker: e.target.value.toUpperCase() })} onBlur={() => p.ticker.trim() && fetchBetaPeer(i)} /></td>
+                  <td><NumberInput value={p.leveredBeta ?? 0} onCommit={(n) => setBetaPeer(i, { leveredBeta: n })} width={80} /></td>
+                  <td><NumberInput value={p.deRatio ?? 0} onCommit={(n) => setBetaPeer(i, { deRatio: n })} width={80} /></td>
+                  <td><button className="mini" onClick={() => setBetaConfig({ peers: betaConfig.peers.filter((_, k) => k !== i) })}>✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button className="add" onClick={() => setBetaConfig({ peers: [...betaConfig.peers, { ticker: '', leveredBeta: null, deRatio: null }] })}>+ Add peer</button>
+          <div className="row" style={{ marginTop: 8 }}>
+            <label className="stack"><span>Target D/E (for relevering)</span><NumberInput value={betaConfig.targetDE} onCommit={(n) => setBetaConfig({ targetDE: n })} width={90} /></label>
+          </div>
+          <p className="note">Peer betas &amp; D/E auto-fetch on ticker entry (D/E best-effort — verify). Unlevered by each peer's D/E and tax, averaged, relevered at your target D/E. This relevered beta replaces the fetched beta in CAPM.</p>
+        </div>
+      )}
       {betaFetch && (
         <p className="note">
           Fetched raw β {betaFetch.raw.toFixed(2)} → Blume-adjusted β <b>{betaFetch.adjusted.toFixed(2)}</b> (⅔×raw + ⅓×1),

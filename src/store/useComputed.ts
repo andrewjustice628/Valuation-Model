@@ -13,12 +13,14 @@ import { impliedRevenueGrowth } from '../engine/reverseDcf';
 import { runDdm } from '../engine/ddm';
 import { runFcfe } from '../engine/fcfe';
 import { runFinancialValuation } from '../engine/financialValuation';
+import { bottomUpBeta } from '../engine/bottomUpBeta';
 import { SECTOR_METHODS } from './useModel';
 
 export function useComputed() {
   const base = useModel((s) => s.base);
   const assumptions = useModel((s) => s.assumptions);
   const wacc = useModel((s) => s.wacc);
+  const betaConfig = useModel((s) => s.betaConfig);
   const bridge = useModel((s) => s.bridge);
   const dcfCfg = useModel((s) => s.dcf);
   const comps = useModel((s) => s.comps);
@@ -30,6 +32,15 @@ export function useComputed() {
 
   return useMemo(() => {
     const statements = buildStatements(base, assumptions);
+
+    // Effective beta: bottom-up industry beta when selected, else the fetched/manual beta.
+    const bu = bottomUpBeta(
+      betaConfig.peers.map((p) => ({ leveredBeta: p.leveredBeta ?? NaN, deRatio: p.deRatio ?? NaN })),
+      betaConfig.targetDE,
+      wacc.taxRate,
+    );
+    const effectiveBeta = betaConfig.method === 'bottomUp' && Number.isFinite(bu.releveredBeta) ? bu.releveredBeta : wacc.beta;
+    const effWacc = { ...wacc, beta: effectiveBeta };
     // Net debt derives from the base year (debt & cash) plus the bridge's other
     // items, so editing the base-year balance sheet flows straight into the DCF.
     const effectiveBridge = {
@@ -39,7 +50,7 @@ export function useComputed() {
     };
     const dcfInput = {
       years: statements.dcfYears,
-      wacc,
+      wacc: effWacc,
       stub: dcfCfg.stub,
       longTermGrowth: dcfCfg.longTermGrowth,
       bridge: effectiveBridge,
@@ -77,7 +88,7 @@ export function useComputed() {
 
     // Reverse DCF — the revenue growth the current price implies.
     const impliedGrowth = sharePrice > 0
-      ? impliedRevenueGrowth({ base, assumptions, wacc, stub: dcfCfg.stub, longTermGrowth: dcfCfg.longTermGrowth, bridge: effectiveBridge, sharesOutstanding: shares, terminalBasis: dcfCfg.terminalBasis, targetPerShare: sharePrice })
+      ? impliedRevenueGrowth({ base, assumptions, wacc: effWacc, stub: dcfCfg.stub, longTermGrowth: dcfCfg.longTermGrowth, bridge: effectiveBridge, sharesOutstanding: shares, terminalBasis: dcfCfg.terminalBasis, targetPerShare: sharePrice })
       : null;
     const assumedGrowth = assumptions.length
       ? assumptions.reduce((s, a) => s + a.revenueGrowth, 0) / assumptions.length
@@ -144,6 +155,7 @@ export function useComputed() {
     }
     const footballField = { ranges, price: sharePrice };
 
-    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning };
-  }, [base, assumptions, wacc, bridge, dcfCfg, comps, precedent, shares, sharePrice, sector, financials]);
+    const betaInfo = { method: betaConfig.method, assetBeta: bu.assetBeta, releveredBeta: bu.releveredBeta, count: bu.count, effectiveBeta };
+    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning, betaInfo };
+  }, [base, assumptions, wacc, betaConfig, bridge, dcfCfg, comps, precedent, shares, sharePrice, sector, financials]);
 }

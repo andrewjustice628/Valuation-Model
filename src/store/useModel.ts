@@ -71,6 +71,19 @@ export interface DcfConfig {
   exitMultiple: number;
 }
 
+export interface BetaPeer {
+  ticker: string;
+  leveredBeta: number | null;
+  deRatio: number | null;
+}
+
+/** Beta source for CAPM: the fetched (Blume-adjusted) beta, or bottom-up industry. */
+export interface BetaConfig {
+  method: 'fetched' | 'bottomUp';
+  peers: BetaPeer[];
+  targetDE: number;
+}
+
 /** Dedicated inputs for valuing financials (banks/insurers) — drive DDM & P/B. */
 export interface FinancialsConfig {
   bookValuePerShare: number;
@@ -218,6 +231,7 @@ export interface ModelSnapshot {
   comps: CompsConfig;
   precedent: PrecedentConfig;
   financials: FinancialsConfig;
+  betaConfig: BetaConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
   historicalBase: Array<Record<string, number>>;
@@ -242,6 +256,11 @@ function initialModel(): ModelSnapshot {
       deals: [{ label: '', multiple: null }, { label: '', multiple: null }, { label: '', multiple: null }],
     },
     financials: { bookValuePerShare: 50, roe: 0.12, payoutRatio: 0.4, highGrowthYears: 10, terminalGrowth: 0.025 },
+    betaConfig: {
+      method: 'fetched',
+      peers: [{ ticker: '', leveredBeta: null, deRatio: null }, { ticker: '', leveredBeta: null, deRatio: null }, { ticker: '', leveredBeta: null, deRatio: null }],
+      targetDE: 0.5,
+    },
     labels: {},
     historicals: [],
     historicalBase: [],
@@ -265,6 +284,7 @@ export interface ModelState {
   comps: CompsConfig;
   precedent: PrecedentConfig;
   financials: FinancialsConfig;
+  betaConfig: BetaConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
   historicalBase: Array<Record<string, number>>;
@@ -295,6 +315,8 @@ export interface ModelState {
   setComps: (patch: Partial<CompsConfig>) => void;
   setPrecedent: (patch: Partial<PrecedentConfig>) => void;
   setFinancials: (patch: Partial<FinancialsConfig>) => void;
+  setBetaConfig: (patch: Partial<BetaConfig>) => void;
+  fetchBetaPeer: (index: number) => Promise<void>;
   setPeer: (index: number, patch: Partial<Peer>) => void;
   addPeer: () => void;
   removePeer: (index: number) => void;
@@ -316,8 +338,8 @@ export const useModel = create<ModelState>((set, get) => ({
     const s = get();
     return {
       company: s.company, base: s.base, assumptions: s.assumptions, wacc: s.wacc, bridge: s.bridge,
-      dcf: s.dcf, comps: s.comps, precedent: s.precedent, financials: s.financials, labels: s.labels,
-      historicals: s.historicals, historicalBase: s.historicalBase, manualOverrides: s.manualOverrides,
+      dcf: s.dcf, comps: s.comps, precedent: s.precedent, financials: s.financials, betaConfig: s.betaConfig,
+      labels: s.labels, historicals: s.historicals, historicalBase: s.historicalBase, manualOverrides: s.manualOverrides,
     };
   },
   saveModel: (name) =>
@@ -375,6 +397,24 @@ export const useModel = create<ModelState>((set, get) => ({
   setComps: (patch) => set((s) => ({ comps: { ...s.comps, ...patch } })),
   setPrecedent: (patch) => set((s) => ({ precedent: { ...s.precedent, ...patch } })),
   setFinancials: (patch) => set((s) => ({ financials: { ...s.financials, ...patch } })),
+  setBetaConfig: (patch) => set((s) => ({ betaConfig: { ...s.betaConfig, ...patch } })),
+  fetchBetaPeer: async (index) => {
+    const peer = get().betaConfig.peers[index];
+    if (!peer?.ticker.trim()) return;
+    try {
+      const { beta, deRatio } = await activeProvider.fetchBeta(peer.ticker.trim());
+      set((s) => ({
+        betaConfig: {
+          ...s.betaConfig,
+          peers: s.betaConfig.peers.map((p, i) =>
+            i === index ? { ...p, leveredBeta: beta ?? p.leveredBeta, deRatio: deRatio ?? p.deRatio } : p,
+          ),
+        },
+      }));
+    } catch {
+      // leave the row for manual entry
+    }
+  },
   setPeer: (index, patch) =>
     set((s) => ({ comps: { ...s.comps, peers: s.comps.peers.map((p, i) => (i === index ? { ...p, ...patch } : p)) } })),
   addPeer: () => set((s) => ({ comps: { ...s.comps, peers: [...s.comps.peers, { ticker: '', multiple: null }] } })),

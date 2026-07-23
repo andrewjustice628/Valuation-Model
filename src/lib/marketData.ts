@@ -24,6 +24,8 @@ export interface MarketDataProvider {
   fetchQuote(symbol: string): Promise<Quote>;
   /** A peer valuation multiple; null when the provider doesn't expose it. */
   fetchMultiple(symbol: string, multipleName: string): Promise<number | null>;
+  /** A peer's levered beta and debt/equity ratio (either may be null). */
+  fetchBeta(symbol: string): Promise<{ beta: number | null; deRatio: number | null }>;
   /** Latest annual reported financials mapped to canonical base-year fields. */
   fetchFinancials(symbol: string): Promise<MappedFinancialsResponse>;
 }
@@ -71,6 +73,12 @@ export const netlifyQuoteProvider: MarketDataProvider = {
     const data = (await res.json().catch(() => ({}))) as { value?: number | null; error?: string };
     if (!res.ok) throw new Error(data.error ?? `Metric request failed (${res.status}).`);
     return typeof data.value === 'number' && Number.isFinite(data.value) ? data.value : null;
+  },
+  async fetchBeta(symbol: string): Promise<{ beta: number | null; deRatio: number | null }> {
+    const res = await fetch(`/api/beta?symbol=${encodeURIComponent(symbol)}`);
+    const data = (await res.json().catch(() => ({}))) as { beta?: number | null; deRatio?: number | null; error?: string };
+    if (!res.ok) throw new Error(data.error ?? `Beta request failed (${res.status}).`);
+    return { beta: data.beta ?? null, deRatio: data.deRatio ?? null };
   },
   async fetchFinancials(symbol: string): Promise<MappedFinancialsResponse> {
     const res = await fetch(`/api/financials?symbol=${encodeURIComponent(symbol)}`);
