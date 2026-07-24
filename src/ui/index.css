@@ -139,6 +139,19 @@ td.sens-base { outline: 2px solid var(--text); outline-offset: -2px; font-weight
 .ff-price { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 4 3; }
 .ff-price-lbl { fill: var(--good); font-size: 11px; }
 
+/* Monte Carlo */
+.mc-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 14px; }
+.mc-hist { width: 100%; min-width: 520px; height: auto; font-variant-numeric: tabular-nums; }
+.mc-bar { fill: color-mix(in srgb, var(--accent) 55%, transparent); }
+.mc-band { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
+.mc-axis { stroke: var(--muted); stroke-width: 1; }
+.mc-axis-lbl { fill: var(--muted); font-size: 10.5px; }
+.mc-median { stroke: var(--text); stroke-width: 2; }
+.mc-basecase { stroke: #f0b73c; stroke-width: 1.5; stroke-dasharray: 5 3; }
+.mc-price { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.mc-mark-lbl { fill: var(--muted); font-size: 10px; }
+.mc-stats li span { max-width: 60%; }
+
 .print-only { display: none; }
 @media print {
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

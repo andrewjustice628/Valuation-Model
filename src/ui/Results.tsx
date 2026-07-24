@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useModel } from '../store/useModel';
 import { useComputed } from '../store/useComputed';
+import { NumberInput } from './fields';
 import type { HistoricalYear } from '../lib/historicals';
 import type { YearStatements } from '../engine/statements';
 import type { SensitivityResult } from '../engine/sensitivity';
+import type { MonteCarloResult } from '../engine/monteCarlo';
+import type { NetDebtBridge, WaccAssumptions } from '../engine/types';
 
 function SensitivityPanel({ s }: { s: SensitivityResult }) {
   const finite = s.perShare.flat().filter((v) => Number.isFinite(v));
@@ -74,6 +77,8 @@ const money = (x: number) =>
   Number.isFinite(x) ? x.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '—';
 const price = (x: number) =>
   Number.isFinite(x) ? `$${x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+const price0 = (x: number) =>
+  Number.isFinite(x) ? `$${x.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—';
 const pct = (x: number) => (Number.isFinite(x) ? `${(x * 100).toFixed(1)}%` : '—');
 
 function UpsideBadge({ target }: { target: number }) {
@@ -170,8 +175,103 @@ function ReverseDcf({ implied, assumed, price }: { implied: number | null; assum
   );
 }
 
+function MonteCarloHistogram({ r, baseCase, price }: { r: MonteCarloResult; baseCase: number; price: number }) {
+  if (r.histogram.length === 0) return null;
+  const lo = r.histogram[0].start;
+  const hi = r.histogram[r.histogram.length - 1].end;
+  const maxCount = Math.max(...r.histogram.map((b) => b.count), 1);
+  const W = 640, H = 240, L = 8, Rp = W - 8, top = 12, plotH = 170;
+  const baseY = top + plotH;
+  const dom = hi - lo || 1;
+  const x = (v: number) => L + ((v - lo) / dom) * (Rp - L);
+  const clampX = (v: number) => Math.max(L, Math.min(Rp, x(v)));
+  const marker = (v: number, cls: string, label: string) =>
+    Number.isFinite(v) && v >= lo && v <= hi ? (
+      <g>
+        <line x1={clampX(v)} x2={clampX(v)} y1={top - 6} y2={baseY} className={cls} />
+        <text x={clampX(v)} y={top - 8} textAnchor="middle" className="mc-mark-lbl">{label}</text>
+      </g>
+    ) : null;
+  return (
+    <div className="ff-wrap">
+      <svg viewBox={`0 0 ${W} ${H}`} className="mc-hist" role="img" aria-label="Distribution of value per share">
+        {/* p5–p95 shaded band */}
+        <rect x={clampX(r.p5)} y={top} width={Math.max(0, clampX(r.p95) - clampX(r.p5))} height={plotH} className="mc-band" />
+        {r.histogram.map((b, i) => {
+          const bx = x(b.start);
+          const bw = Math.max(1, x(b.end) - x(b.start) - 1);
+          const bh = (b.count / maxCount) * plotH;
+          return <rect key={i} x={bx} y={baseY - bh} width={bw} height={bh} className="mc-bar" />;
+        })}
+        <line x1={L} x2={Rp} y1={baseY} y2={baseY} className="mc-axis" />
+        {marker(r.p50, 'mc-median', 'median')}
+        {marker(baseCase, 'mc-basecase', 'base DCF')}
+        {price > 0 && marker(price, 'mc-price', 'price')}
+        {/* axis endpoints */}
+        <text x={L} y={baseY + 18} className="mc-axis-lbl">{price0(lo)}</text>
+        <text x={Rp} y={baseY + 18} textAnchor="end" className="mc-axis-lbl">{price0(hi)}</text>
+      </svg>
+    </div>
+  );
+}
+
+function MonteCarloPanel({ derived, baseCase }: {
+  derived: { wacc: WaccAssumptions; baseWacc: number; bridge: NetDebtBridge };
+  baseCase: number;
+}) {
+  const mc = useModel((s) => s.mc);
+  const setMc = useModel((s) => s.setMc);
+  const runSimulation = useModel((s) => s.runSimulation);
+  const result = useModel((s) => s.mcResult);
+  const sharePrice = useModel((s) => s.company.sharePrice);
+
+  return (
+    <section className="panel">
+      <h3>Monte Carlo — distribution of value</h3>
+      <p className="note" style={{ marginTop: 0 }}>
+        Samples the four highest-leverage drivers from normal distributions and re-runs the full DCF each trial.
+        Set each driver's uncertainty (± one standard deviation), then run.
+      </p>
+      <div className="mc-controls">
+        <label className="stack"><span>Trials</span><NumberInput value={mc.trials} onCommit={(n) => setMc({ trials: Math.max(1, Math.round(n)) })} width={80} /></label>
+        <label className="stack"><span>Revenue growth ±σ</span><NumberInput value={mc.revenueGrowthSd} onCommit={(n) => setMc({ revenueGrowthSd: Math.max(0, n) })} percent width={70} /></label>
+        <label className="stack"><span>Gross margin ±σ</span><NumberInput value={mc.marginSd} onCommit={(n) => setMc({ marginSd: Math.max(0, n) })} percent width={70} /></label>
+        <label className="stack"><span>WACC ±σ</span><NumberInput value={mc.waccSd} onCommit={(n) => setMc({ waccSd: Math.max(0, n) })} percent width={70} /></label>
+        <label className="stack"><span>Terminal growth ±σ</span><NumberInput value={mc.terminalGrowthSd} onCommit={(n) => setMc({ terminalGrowthSd: Math.max(0, n) })} percent width={70} /></label>
+        <button className="add" style={{ alignSelf: 'flex-end' }} onClick={() => runSimulation(derived)}>Run simulation</button>
+      </div>
+
+      {result && (result.usable > 0 ? (
+        <>
+          <MonteCarloHistogram r={result} baseCase={baseCase} price={sharePrice} />
+          <ul className="totals mc-stats">
+            <li><span>Median (P50)</span><b>{price(result.p50)}</b></li>
+            <li><span>Mean</span><b>{price(result.mean)}</b></li>
+            <li><span>Std deviation</span><b>{price(result.stdDev)}</b></li>
+            <li><span>90% interval (P5–P95)</span><b>{price(result.p5)} – {price(result.p95)}</b></li>
+            <li><span>Interquartile (P25–P75)</span><b>{price(result.p25)} – {price(result.p75)}</b></li>
+            <li><span>Base-case DCF</span><b>{price(baseCase)}</b></li>
+            {result.probUndervalued != null && (
+              <li><span>P(undervalued vs {price(sharePrice)})</span><b>{pct(result.probUndervalued)}</b></li>
+            )}
+            <li><span>Trials used</span><b>{result.usable.toLocaleString()}{result.discarded > 0 ? ` (${result.discarded.toLocaleString()} discarded)` : ''}</b></li>
+          </ul>
+          {result.probUndervalued != null && (
+            <p className="note">
+              Across {result.usable.toLocaleString()} scenarios, the intrinsic value exceeded today's price of {price(sharePrice)} in <b>{pct(result.probUndervalued)}</b> of them.
+              {result.discarded > 0 && ` ${result.discarded.toLocaleString()} trial(s) were discarded where a shocked WACC collapsed onto the terminal growth rate — widen with care.`}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="note diag-warn">⚠️ No usable trials — every scenario blew up (a shocked WACC at/below terminal growth). Lower the WACC ±σ or the terminal-growth assumption.</p>
+      ))}
+    </section>
+  );
+}
+
 export function Results() {
-  const { statements, dcf, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning } = useComputed();
+  const { statements, dcf, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning, mcDerived } = useComputed();
   const historicals = useModel((s) => s.historicals);
   const [tab, setTab] = useState<'is' | 'bs' | 'cf'>('is');
 
@@ -221,6 +321,7 @@ export function Results() {
       </section>
 
       <SensitivityPanel s={sensitivity} />
+      <MonteCarloPanel derived={mcDerived} baseCase={dcf.equityValuePerShare} />
 
       <section className="panel">
         <div className="tabs">

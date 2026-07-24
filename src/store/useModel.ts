@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { activeProvider } from '../lib/marketData';
 import { RAMP_SEED_FIELDS, revenueGrowthFromHistory, effectiveTaxRate } from '../lib/seed';
 import { blumeAdjustedBeta } from '../engine/finance';
+import { runMonteCarlo, mulberry32, type MonteCarloResult } from '../engine/monteCarlo';
 import { loadAll, saveAll, type SavedModel } from '../lib/persistence';
 import type { HistoricalYear } from '../lib/historicals';
 import type { BaseYear, ForecastAssumptions } from '../engine/statements';
@@ -76,6 +77,20 @@ export interface BetaPeer {
   leveredBeta: number | null;
   deRatio: number | null;
 }
+
+/** Monte Carlo settings: trial count, per-driver shock std devs, and RNG seed. */
+export interface McConfig {
+  trials: number;
+  revenueGrowthSd: number;
+  marginSd: number;
+  waccSd: number;
+  terminalGrowthSd: number;
+  seed: number;
+}
+
+export const defaultMcConfig: McConfig = {
+  trials: 5000, revenueGrowthSd: 0.03, marginSd: 0.02, waccSd: 0.01, terminalGrowthSd: 0.005, seed: 12345,
+};
 
 /** Beta source for CAPM: the fetched (Blume-adjusted) beta, or bottom-up industry. */
 export interface BetaConfig {
@@ -234,6 +249,7 @@ export interface ModelSnapshot {
   precedent: PrecedentConfig;
   financials: FinancialsConfig;
   betaConfig: BetaConfig;
+  mc: McConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
   historicalBase: Array<Record<string, number>>;
@@ -264,6 +280,7 @@ function initialModel(): ModelSnapshot {
       targetDE: 0.5,
       targetDEAuto: true,
     },
+    mc: { ...defaultMcConfig },
     labels: {},
     historicals: [],
     historicalBase: [],
@@ -275,6 +292,7 @@ const TRANSIENT = {
   quoteStatus: 'idle' as FetchStatus, quoteError: null,
   financialsStatus: 'idle' as FetchStatus, financialsMessage: null,
   betaFetch: null as { raw: number; adjusted: number } | null,
+  mcResult: null as MonteCarloResult | null,
 };
 
 export interface ModelState {
@@ -288,6 +306,7 @@ export interface ModelState {
   precedent: PrecedentConfig;
   financials: FinancialsConfig;
   betaConfig: BetaConfig;
+  mc: McConfig;
   labels: Record<string, string>;
   historicals: HistoricalYear[];
   historicalBase: Array<Record<string, number>>;
@@ -299,6 +318,8 @@ export interface ModelState {
   financialsMessage: string | null;
   /** Raw vs Blume-adjusted beta from the last quote fetch (for display). */
   betaFetch: { raw: number; adjusted: number } | null;
+  /** Last Monte Carlo run (on-demand; null until the user runs one). */
+  mcResult: MonteCarloResult | null;
   savedModels: SavedModel<ModelSnapshot>[];
   currentName: string;
 
@@ -320,6 +341,8 @@ export interface ModelState {
   setFinancials: (patch: Partial<FinancialsConfig>) => void;
   setBetaConfig: (patch: Partial<BetaConfig>) => void;
   fetchBetaPeer: (index: number) => Promise<void>;
+  setMc: (patch: Partial<McConfig>) => void;
+  runSimulation: (derived: { wacc: WaccAssumptions; baseWacc: number; bridge: NetDebtBridge }) => void;
   setPeer: (index: number, patch: Partial<Peer>) => void;
   addPeer: () => void;
   removePeer: (index: number) => void;
@@ -342,7 +365,7 @@ export const useModel = create<ModelState>((set, get) => ({
     return {
       company: s.company, base: s.base, assumptions: s.assumptions, wacc: s.wacc, bridge: s.bridge,
       dcf: s.dcf, comps: s.comps, precedent: s.precedent, financials: s.financials, betaConfig: s.betaConfig,
-      labels: s.labels, historicals: s.historicals, historicalBase: s.historicalBase, manualOverrides: s.manualOverrides,
+      mc: s.mc, labels: s.labels, historicals: s.historicals, historicalBase: s.historicalBase, manualOverrides: s.manualOverrides,
     };
   },
   saveModel: (name) =>
@@ -417,6 +440,28 @@ export const useModel = create<ModelState>((set, get) => ({
     } catch {
       // leave the row for manual entry
     }
+  },
+  setMc: (patch) => set((s) => ({ mc: { ...s.mc, ...patch } })),
+  runSimulation: (derived) => {
+    const s = get();
+    const { trials, revenueGrowthSd, marginSd, waccSd, terminalGrowthSd, seed } = s.mc;
+    const result = runMonteCarlo({
+      base: s.base,
+      assumptions: s.assumptions,
+      wacc: derived.wacc,
+      baseWacc: derived.baseWacc,
+      stub: s.dcf.stub,
+      longTermGrowth: s.dcf.longTermGrowth,
+      bridge: derived.bridge,
+      sharesOutstanding: s.company.sharesOutstanding,
+      terminalBasis: s.dcf.terminalBasis,
+      terminalMethod: s.dcf.terminalMethod,
+      exitMultiple: s.dcf.exitMultiple,
+      sharePrice: s.company.sharePrice,
+      config: { trials, revenueGrowthSd, marginSd, waccSd, terminalGrowthSd },
+      rng: mulberry32(seed),
+    });
+    set({ mcResult: result });
   },
   setPeer: (index, patch) =>
     set((s) => ({ comps: { ...s.comps, peers: s.comps.peers.map((p, i) => (i === index ? { ...p, ...patch } : p)) } })),

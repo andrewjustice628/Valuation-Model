@@ -160,6 +160,9 @@ export function useComputed() {
     const footballField = { ranges, price: sharePrice };
 
     const betaInfo = { method: betaConfig.method, assetBeta: bu.assetBeta, releveredBeta: bu.releveredBeta, count: bu.count, effectiveBeta, targetDE: effectiveTargetDE, targetDEAuto: betaConfig.targetDEAuto && Number.isFinite(autoTargetDE) };
-    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning, betaInfo };
+    // Derived inputs the on-demand Monte Carlo run needs (same effective WACC &
+    // net-debt bridge the point-estimate DCF used).
+    const mcDerived = { wacc: effWacc, baseWacc: dcf.wacc.wacc, bridge: effectiveBridge };
+    return { statements, dcf, compsResult, terminalEbitda, companyMetric, diagnostics, sensitivity, impliedGrowth, assumedGrowth, footballField, methods, sector, financialsWarning, betaInfo, mcDerived };
   }, [base, assumptions, wacc, betaConfig, bridge, dcfCfg, comps, precedent, shares, sharePrice, sector, financials]);
 }
